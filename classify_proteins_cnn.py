@@ -5,11 +5,11 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import LabelEncoder
-from sklearn.metrics import classification_report, accuracy_score, confusion_matrix # Added confusion_matrix
+from sklearn.preprocessing import LabelEncoder, MultiLabelBinarizer # Added MultiLabelBinarizer
+from sklearn.metrics import classification_report, accuracy_score, confusion_matrix
 
-import matplotlib.pyplot as plt # New import
-import seaborn as sns # New import
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 # --- Part 3: Protein Classification with CNN ---
 
@@ -35,128 +35,138 @@ except FileNotFoundError:
                      'GHIJKLMNOPQRSTVWYACDEFGHIKLMNPQRSTVWYACDEFGHIKLMNPQRSTVWYACDEFGHIKLMNPQRSTVWY',
                      'IJKLMNOPQRSTVWYACDEFGHIKLMNPQRSTVWYACDEFGHIKLMNPQRSTVWYACDEFGHIKLMNPQRSTVWY',
                      'KLMNPQRSTVWYACDEFGHIKLMNPQRSTVWYACDEFGHIKLMNPQRSTVWYACDEFGHIKLMNPQRSTVWY'],
-        'Pfam_Family_ID': ['PF00001', 'PF00002', 'PF00001', 'PF00003', 'Unknown', 'PF00001', 'PF00002', 'PF00001', 'PF00003', 'Unknown'],
+        'Pfam_Family_IDs': ['PF00001,PF00002', 'PF00002', 'PF00001', 'PF00003', 'Unknown', 'PF00001', 'PF00002', 'PF00001', 'PF00003', 'Unknown'],
         'Protein class': ['Enzyme', 'Transporter', 'Enzyme', 'Structural', 'Enzyme', 'Transporter', 'Enzyme', 'Structural', 'Enzyme', 'Transporter'],
         'Biological process': ['Metabolism', 'Transport', 'Signaling', 'Structure', 'Metabolism', 'Transport', 'Signaling', 'Structure', 'Metabolism', 'Transport'],
         'Molecular function': ['Catalytic', 'Binding', 'Catalytic', 'Structural', 'Binding', 'Catalytic', 'Binding', 'Catalytic', 'Structural', 'Binding'],
-        'ESM2_Embedding': [np.random.rand(320) for _ in range(10)] # Dummy embeddings (ESM2_t12_35M_UR50D has 320 dim)
+        'GO_IDs': ['GO:0003824,GO:0008152', 'GO:0006810', 'GO:0007165', 'GO:0005198', 'Unknown', 'GO:0003824', 'GO:0006810', 'GO:0007165', 'GO:0005198', 'Unknown'],
+        'ESM2_Embedding': [np.random.rand(320) for _ in range(10)]
     }
     df_processed = pd.DataFrame(data)
     print("Dummy DataFrame created.")
 
 # Prepare Features (X) and Target (y)
-# Ensure ESM2_Embedding is in a format suitable for PyTorch (float32)
-# Stack embeddings and convert to PyTorch tensor
-X = np.vstack(df_processed['ESM2_Embedding'].values).astype(np.float32)
-X = torch.tensor(X).unsqueeze(1) # Add a channel dimension for Conv1d (batch_size, channels, sequence_length)
+X_embeddings = np.vstack(df_processed['ESM2_Embedding'].values).astype(np.float32)
+X_embeddings_tensor = torch.tensor(X_embeddings).unsqueeze(1)
 
-# Encode target labels
+def split_and_clean_ids(id_string):
+    if pd.isna(id_string) or id_string == 'Unknown':
+        return []
+    return id_string.split(',')
+
+df_processed['Pfam_Family_IDs_list'] = df_processed['Pfam_Family_IDs'].apply(split_and_clean_ids)
+df_processed['GO_IDs_list'] = df_processed['GO_IDs'].apply(split_and_clean_ids)
+
+mlb_pfam = MultiLabelBinarizer()
+X_pfam_encoded = mlb_pfam.fit_transform(df_processed['Pfam_Family_IDs_list'])
+print(f"Pfam features shape: {X_pfam_encoded.shape}")
+
+mlb_go = MultiLabelBinarizer()
+X_go_encoded = mlb_go.fit_transform(df_processed['GO_IDs_list'])
+print(f"GO features shape: {X_go_encoded.shape}")
+
+X_categorical_combined = np.hstack((X_pfam_encoded, X_go_encoded)).astype(np.float32)
+print(f"Combined categorical features shape: {X_categorical_combined.shape}")
+
 label_encoder = LabelEncoder()
 y = label_encoder.fit_transform(df_processed['Protein class'])
-y = torch.tensor(y, dtype=torch.long) # Convert to long for CrossEntropyLoss
+y = torch.tensor(y, dtype=torch.long)
 
 num_classes = len(label_encoder.classes_)
-embedding_dim = X.shape[2] # Dimension of the ESM2 embedding
+embedding_dim = X_embeddings_tensor.shape[2]
+categorical_feature_dim = X_categorical_combined.shape[1]
 
-print(f"Shape of features (X) for CNN: {X.shape} (batch_size, channels, embedding_dim)")
+print(f"Shape of ESM2 features for CNN: {X_embeddings_tensor.shape} (batch_size, channels, embedding_dim)")
+print(f"Shape of combined categorical features: {X_categorical_combined.shape}")
 print(f"Shape of target (y): {y.shape}")
 print(f"Number of classes: {num_classes}")
-print(f"Embedding dimension: {embedding_dim}")
+print(f"ESM2 Embedding dimension: {embedding_dim}")
+print(f"Categorical Feature dimension: {categorical_feature_dim}")
 
-# Split data into training and testing sets
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+X_train_emb, X_test_emb, X_train_cat, X_test_cat, y_train, y_test = train_test_split(
+    X_embeddings_tensor, X_categorical_combined, y, test_size=0.2, random_state=42, stratify=y
+)
 
-# Create PyTorch Datasets and DataLoaders
-train_dataset = TensorDataset(X_train, y_train)
-test_dataset = TensorDataset(X_test, y_test)
+train_dataset = TensorDataset(X_train_emb, torch.tensor(X_train_cat), y_train)
+test_dataset = TensorDataset(X_test_emb, torch.tensor(X_test_cat), y_test)
 
-batch_size = 32 # You can adjust this
+batch_size = 32
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
-# Define the CNN Model
 class ProteinCNN(nn.Module):
-    def __init__(self, embedding_dim, num_classes):
+    def __init__(self, embedding_dim, categorical_feature_dim, num_classes):
         super(ProteinCNN, self).__init__()
-        # Conv1d layer: in_channels=1 (for single embedding), out_channels=128, kernel_size=3
-        # We'll use a kernel size that makes sense for the embedding dimension.
-        # A smaller kernel size will look for local patterns within the embedding.
         self.conv1 = nn.Conv1d(in_channels=1, out_channels=128, kernel_size=3, padding=1)
         self.relu = nn.ReLU()
         self.pool = nn.MaxPool1d(kernel_size=2)
         
-        # Calculate the output size after conv and pool to determine input for linear layer
-        # (embedding_dim + 2*padding - kernel_size) / stride + 1  (for conv)
-        # (output_conv_dim - kernel_size) / stride + 1 (for pool)
-        # Here, with padding=1, kernel_size=3, stride=1 for conv: output_conv_dim = embedding_dim
-        # With pool kernel_size=2, stride=2: output_pool_dim = embedding_dim // 2
-        
-        self.fc1 = nn.Linear(128 * (embedding_dim // 2), 64) # Adjust input features based on pooling output
+        cnn_output_dim = 128 * (embedding_dim // 2)
+
+        self.fc1 = nn.Linear(cnn_output_dim + categorical_feature_dim, 64)
         self.fc2 = nn.Linear(64, num_classes)
 
-    def forward(self, x):
-        x = self.conv1(x)
-        x = self.relu(x)
-        x = self.pool(x)
-        x = x.view(x.size(0), -1) # Flatten the output for the fully connected layer
+    def forward(self, x_emb, x_cat):
+        x_emb = self.conv1(x_emb)
+        x_emb = self.relu(x_emb)
+        x_emb = self.pool(x_emb)
+        x_emb = x_emb.view(x_emb.size(0), -1)
+
+        x = torch.cat((x_emb, x_cat), dim=1)
+
         x = self.fc1(x)
         x = self.relu(x)
         x = self.fc2(x)
         return x
 
-# Initialize model, loss function, and optimizer
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 
-model = ProteinCNN(embedding_dim, num_classes).to(device)
+model = ProteinCNN(embedding_dim, categorical_feature_dim, num_classes).to(device)
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=0.001)
 
-# Training Loop
-num_epochs = 10 # You can adjust this
+num_epochs = 10
 print(f"\nTraining CNN for {num_epochs} epochs...")
-train_losses = [] # New list to store training losses
+train_losses = []
 
 for epoch in range(num_epochs):
-    model.train() # Set model to training mode
+    model.train()
     running_loss = 0.0
-    for inputs, labels in train_loader:
-        inputs, labels = inputs.to(device), labels.to(device)
+    for inputs_emb, inputs_cat, labels in train_loader:
+        inputs_emb, inputs_cat, labels = inputs_emb.to(device), inputs_cat.to(device), labels.to(device)
 
-        optimizer.zero_grad() # Zero the parameter gradients
-        outputs = model(inputs)
+        optimizer.zero_grad()
+        outputs = model(inputs_emb, inputs_cat)
         loss = criterion(outputs, labels)
-        loss.backward() # Backpropagation
-        optimizer.step() # Update weights
-        running_loss += loss.item() * inputs.size(0)
+        loss.backward()
+        optimizer.step()
+        running_loss += loss.item() * inputs_emb.size(0)
 
     epoch_loss = running_loss / len(train_loader.dataset)
-    train_losses.append(epoch_loss) # Store the loss
+    train_losses.append(epoch_loss)
     print(f"Epoch {epoch+1}/{num_epochs}, Loss: {epoch_loss:.4f}")
 
 print("\nCNN Training Complete.")
 
-# Save the trained model
 model_save_path = "protein_cnn_model.pth"
 torch.save(model.state_dict(), model_save_path)
 print(f"Trained model saved to {model_save_path}")
 
-# Evaluate the Model
 print("\nEvaluating the CNN model...")
-model.eval() # Set model to evaluation mode
+model.eval()
 y_true = []
 y_pred = []
 
-with torch.no_grad(): # Disable gradient calculation during evaluation
-    for inputs, labels in test_loader:
-        inputs, labels = inputs.to(device), labels.to(device)
-        outputs = model(inputs)
-        _, predicted = torch.max(outputs.data, 1) # Get the class with the highest probability
+with torch.no_grad():
+    for inputs_emb, inputs_cat, labels in test_loader:
+        inputs_emb, inputs_cat, labels = inputs_emb.to(device), inputs_cat.to(device), labels.to(device)
+        outputs = model(inputs_emb, inputs_cat)
+        _, predicted = torch.max(outputs.data, 1)
         
         y_true.extend(labels.cpu().numpy())
-        y_pred.extend(predicted.cpu().numpy())
+y_pred.extend(predicted.cpu().numpy())
 
-# Convert numerical predictions back to original class names for report
 y_true_labels = label_encoder.inverse_transform(y_true)
 y_pred_labels = label_encoder.inverse_transform(y_pred)
 
@@ -166,25 +176,23 @@ print(classification_report(y_true_labels, y_pred_labels))
 
 print("\n--- Protein Classification with CNN Complete ---")
 
-# Plotting Training Loss
 plt.figure(figsize=(10, 6))
 plt.plot(range(1, num_epochs + 1), train_losses, marker='o')
 plt.title('Training Loss Over Epochs')
 plt.xlabel('Epoch')
 plt.ylabel('Loss')
 plt.grid(True)
-plt.savefig('training_loss.png') # Save the plot
-plt.close() # Close the plot to free memory
+plt.savefig('training_loss.png')
+plt.close()
 print("\nTraining loss plot saved to training_loss.png")
 
-# Plotting Confusion Matrix
 cm = confusion_matrix(y_true_labels, y_pred_labels, labels=label_encoder.classes_)
 plt.figure(figsize=(12, 10))
 sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=label_encoder.classes_, yticklabels=label_encoder.classes_)
 plt.title('Confusion Matrix')
 plt.xlabel('Predicted Label')
 plt.ylabel('True Label')
-plt.tight_layout() # Adjust layout to prevent labels from overlapping
-plt.savefig('confusion_matrix.png') # Save the plot
-plt.close() # Close the plot to free memory
+plt.tight_layout()
+plt.savefig('confusion_matrix.png')
+plt.close()
 print("Confusion matrix plot saved to confusion_matrix.png")
