@@ -31,9 +31,9 @@ def parse_protein_atlas(protein_atlas_file):
     return df
 
 if __name__ == "__main__":
-    fasta_file = "/home/pixel/Downloads/Hackaton/Protein-Explorer-Atlas/data/UP000005640_9606.fasta"
-    pfam_regions_file = "/home/pixel/Downloads/Hackaton/Protein-Explorer-Atlas/data/Pfam-A.regions.tsv"
-    protein_atlas_file = "/home/pixel/Downloads/Hackaton/Protein-Explorer-Atlas/data/proteinatlas.tsv"
+    fasta_file = r"C:\Users\jonat\OneDrive\Documents\DATASET\UP000005640_9606.fasta"
+    pfam_regions_file = r"C:\Users\jonat\OneDrive\Documents\DATASET\Pfam-A.regions.tsv"
+    protein_atlas_file = r"C:\Users\jonat\OneDrive\Documents\DATASET\proteinatlas.tsv"
 
     print("Parsing FASTA file...")
     fasta_df = parse_fasta(fasta_file)
