@@ -55,8 +55,7 @@ print(f"Shape after 'Protein class' filter: {df_merged.shape}")
 
 # Pfam desconocidos: Etiquetar como Unknown.
 # This is already handled by data_processing.py, but we can re-confirm/re-apply if needed.
-df_merged['Pfam_Family_ID'].fillna('Unknown', inplace=True)
-print("Ensured 'Pfam_Family_ID' missing values are labeled as 'Unknown'.")
+df_merged['Pfam_Family_IDs'].fillna('Unknown', inplace=True) # Updated column name
 
 print("\n--- Data Cleaning and Filtering Complete ---")
 print(f"Final shape after cleaning: {df_merged.shape}")
