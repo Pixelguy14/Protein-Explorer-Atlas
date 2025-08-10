@@ -1,3 +1,7 @@
 Flask
 biopython
 pandas
+transformers
+torch
+numpy
+scikit-learn
