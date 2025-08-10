@@ -1,5 +1,5 @@
-import pandas as pd # type: ignore
-from Bio import SeqIO # type: ignore
+import pandas as pd
+from Bio import SeqIO
 
 def parse_fasta(fasta_file):
     """
@@ -14,12 +14,17 @@ def parse_fasta(fasta_file):
 
 def parse_pfam_regions(pfam_regions_file):
     """
-    Parses the Pfam-A.regions.tsv file to extract Pfam family information.
+    Parses the Pfam-A.regions_human.tsv file to extract Pfam family information
+    and aggregates multiple Pfam IDs per UniProt ID.
     """
     # Assuming tab-separated and relevant columns are 'pfamseq_acc' and 'pfamA_acc'
     df = pd.read_csv(pfam_regions_file, sep='\t', usecols=['pfamseq_acc', 'pfamA_acc'], engine='c')
     df.rename(columns={'pfamseq_acc': 'UniProt_ID', 'pfamA_acc': 'Pfam_Family_ID'}, inplace=True)
-    return df
+
+    # Aggregate multiple Pfam IDs for each UniProt_ID into a single string
+    df_agg = df.groupby('UniProt_ID')['Pfam_Family_ID'].apply(lambda x: ','.join(x.astype(str).unique())).reset_index()
+    df_agg.rename(columns={'Pfam_Family_ID': 'Pfam_Family_IDs'}, inplace=True) # Rename column to reflect aggregation
+    return df_agg
 
 def parse_protein_atlas(protein_atlas_file):
     """
@@ -30,10 +35,28 @@ def parse_protein_atlas(protein_atlas_file):
     df.rename(columns={'Uniprot': 'UniProt_ID'}, inplace=True)
     return df
 
+def parse_go_annotations(go_annotations_file):
+    """
+    Parses the goa_human.gaf file to extract UniProt to GO term mappings
+    and aggregates multiple GO IDs per UniProt ID.
+    """
+    # GAF format is tab-separated. We need UniProt ID (col 2) and GO ID (col 5).
+    # Skip comment lines starting with '!'
+    df = pd.read_csv(go_annotations_file, sep='\t', header=None, comment='!',
+                     usecols=[1, 4], names=['UniProt_ID', 'GO_ID'], engine='c')
+
+    # Aggregate multiple GO IDs for each UniProt_ID into a single string
+    df_agg = df.groupby('UniProt_ID')['GO_ID'].apply(lambda x: ','.join(x.astype(str).unique())).reset_index()
+    df_agg.rename(columns={'GO_ID': 'GO_IDs'}, inplace=True) # Rename column to reflect aggregation
+    return df_agg
+
+
 if __name__ == "__main__":
-    fasta_file = "/home/pixel/Downloads/Hackaton/Protein-Explorer-Atlas/data/UP000005640_9606.fasta"
-    pfam_regions_file = "/home/pixel/Downloads/Hackaton/Protein-Explorer-Atlas/data/Pfam-A.regions.tsv"
-    protein_atlas_file = "/home/pixel/Downloads/Hackaton/Protein-Explorer-Atlas/data/proteinatlas.tsv"
+    # Updated file paths to reflect new subdirectory structure
+    fasta_file = "data/UP000005640_9606.fasta"
+    pfam_regions_file = "data/pfam/Pfam-A.regions_human.tsv"
+    protein_atlas_file = "data/hpa/proteinatlas.tsv"
+    go_annotations_file = "data/goa/goa_human.gaf" # New file path
 
     print("Parsing FASTA file...")
     fasta_df = parse_fasta(fasta_file)
@@ -50,19 +73,25 @@ if __name__ == "__main__":
     print(f"HPA data shape: {hpa_df.shape}")
     print(hpa_df.head())
 
+    print("\nParsing GO annotations...")
+    go_df = parse_go_annotations(go_annotations_file)
+    print(f"GO annotations shape: {go_df.shape}")
+    print(go_df.head())
+
     # Merge dataframes
     print("\nMerging dataframes...")
     # Start with FASTA data as the base
     unified_df = fasta_df
 
-    # Merge with Pfam data
-    # A protein can have multiple Pfam domains, so we'll merge based on UniProt_ID
-    # and keep all Pfam families associated with a protein.
+    # Merge with Pfam data (now aggregated)
     unified_df = pd.merge(unified_df, pfam_df, on='UniProt_ID', how='left')
 
     # Merge with HPA data
-    # HPA data also has UniProt_ID.
     unified_df = pd.merge(unified_df, hpa_df, on='UniProt_ID', how='left')
+
+    # Merge with GO annotations (now aggregated)
+    unified_df = pd.merge(unified_df, go_df, on='UniProt_ID', how='left')
+
 
     print(f"Unified data shape: {unified_df.shape}")
     print(unified_df.head())
@@ -73,12 +102,14 @@ if __name__ == "__main__":
     unified_df.drop_duplicates(subset=['UniProt_ID', 'Sequence'], inplace=True)
     print(f"Removed {initial_rows - unified_df.shape[0]} duplicate protein sequences.")
 
-    # Filter proteins without Pfam classification (if desired, for now, keep them but note NaNs)
-    # unified_df.dropna(subset=['Pfam_Family_ID'], inplace=True)
-    # print(f"Filtered out proteins without Pfam classification. New shape: {unified_df.shape}")
-
     # Handle missing values (e.g., fill with 'Unknown' or specific placeholder)
-    unified_df.fillna({'Pfam_Family_ID': 'Unknown', 'Protein class': 'Unknown', 'Biological process': 'Unknown', 'Molecular function': 'Unknown'}, inplace=True)
+    unified_df.fillna({
+        'Pfam_Family_IDs': 'Unknown',
+        'Protein class': 'Unknown',
+        'Biological process': 'Unknown',
+        'Molecular function': 'Unknown',
+        'GO_IDs': 'Unknown' # New: fill missing GO IDs
+    }, inplace=True)
 
     print("\nUnified and partially cleaned data:")
     print(unified_df.head())
