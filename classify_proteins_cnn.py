@@ -63,7 +63,7 @@ print(f"Embedding dimension: {embedding_dim}")
 # Split data into training and testing sets
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
 
-# Create PyTorch Datasets and DataLoaders
+# Create PyTorch Datasets and DataLoaderss
 train_dataset = TensorDataset(X_train, y_train)
 test_dataset = TensorDataset(X_test, y_test)
 
