@@ -1,0 +1,69 @@
+## 2. How to Download and Organize the Datasets (Windows Version)
+
+**Importante:** En Windows, los comandos tipo Linux (`mkdir -p`, `wget`, `gunzip`, `awk`, `unzip`) no funcionan directamente en CMD/PowerShell. Aquí tienes los pasos adaptados para Windows:
+
+1. **Crear las subcarpetas necesarias:**
+   Abre CMD en la raíz de tu proyecto y ejecuta:
+   ```
+   mkdir data\pfam
+   mkdir data\hpa
+   mkdir data\goa
+   mkdir data\pdb
+   ```
+
+2. **Descargar los archivos manualmente:**
+   Abre tu navegador y descarga cada archivo en la carpeta correspondiente:
+
+   - **UniProt Human Proteome (Amino Acid Sequences):**
+     [Descargar UP000005640_9606.fasta.gz](https://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/reference_proteomes/Eukaryota/UP000005640/UP000005640_9606.fasta.gz)
+     - Guarda en `data\`
+
+   - **Pfam-UniProt Mapping (Pfam-A.regions.tsv.gz):**
+     [Descargar Pfam-A.regions.tsv.gz](https://ftp.ebi.ac.uk/pub/databases/Pfam/current_release/Pfam-A.regions.tsv.gz)
+     - Guarda en `data\pfam\`
+
+   - **Pfam HMM Library (Pfam-A.hmm.dat.gz):**
+     [Descargar Pfam-A.hmm.dat.gz](https://ftp.ebi.ac.uk/pub/databases/Pfam/current_release/Pfam-A.hmm.dat.gz)
+     - Guarda en `data\pfam\`
+
+   - **Human Protein Atlas (HPA) Annotation Data:**
+     [Descargar proteinatlas.tsv.zip](https://www.proteinatlas.org/download/proteinatlas.tsv.zip)
+     - Guarda en `data\hpa\`
+
+   - **Gene Ontology (GO) Annotation Data (goa_human.gaf.gz):**
+     [Descargar goa_human.gaf.gz](tp://ftp.ebi.ac.uk/pub/databases/GO/goa/HUMAN/goa_human.gaf.gz)f
+     - Guarda en `data\goa\`
+
+3. **Descomprimir los archivos:**
+   - Haz clic derecho sobre cada archivo `.gz` y `.zip` y selecciona "Extraer aquí" usando [7-Zip](https://www.7-zip.org/) o WinRAR.
+   - El resultado debe ser:
+     - `UP000005640_9606.fasta` en `data\`
+     - `Pfam-A.regions.tsv` y `Pfam-A.hmm.dat` en `data\pfam\`
+     - `proteinatlas.tsv` en `data\hpa\`
+     - `goa_human.gaf` en `data\goa\`
+
+   - Para filtrar solo las proteínas humanas en `Pfam-A.regions.tsv`, puedes hacerlo en Excel o con un script Python (consulta la documentación del proyecto).
+
+4. **Instalar dependencias de Python:**
+   En CMD, en la raíz del proyecto:
+   ```
+   pip install -r requirements.txt
+   ```
+
+5. **Procesar y unificar los datos:**
+   ```
+   python data_processing.py
+   ```
+   > **Nota:** Si los archivos están en subcarpetas, actualiza las rutas en `data_processing.py`.
+
+6. **Limpiar datos y generar embeddings ESM-2:**
+   ```
+   python process_and_embed.py
+   ```
+
+7. **Entrenar el modelo de clasificación CNN:**
+   ```
+   python classify_proteins_cnn.py
+   ```
+
+**¡Listo!** Así puedes preparar y entrenar el

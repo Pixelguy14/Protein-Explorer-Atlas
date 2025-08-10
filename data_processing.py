@@ -54,7 +54,7 @@ def parse_go_annotations(go_annotations_file):
 if __name__ == "__main__":
     # Updated file paths to reflect new subdirectory structure
     fasta_file = "data/UP000005640_9606.fasta"
-    pfam_regions_file = "data/pfam/Pfam-A.regions_human.tsv"
+    pfam_regions_file = "data/pfam/Pfam-A.regions.tsv"
     protein_atlas_file = "data/hpa/proteinatlas.tsv"
     go_annotations_file = "data/goa/goa_human.gaf" # New file path
 
