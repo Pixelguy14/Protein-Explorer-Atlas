@@ -1,12 +1,15 @@
-import pandas as pd # type: ignore
+import pandas as pd
 import numpy as np
-import torch # type: ignore
-import torch.nn as nn # type: ignore
-import torch.optim as optim # type: ignore
-from torch.utils.data import DataLoader, TensorDataset # type: ignore
-from sklearn.model_selection import train_test_split # type: ignore
-from sklearn.preprocessing import LabelEncoder # type: ignore
-from sklearn.metrics import classification_report, accuracy_score # type: ignore
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import DataLoader, TensorDataset
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder
+from sklearn.metrics import classification_report, accuracy_score, confusion_matrix # Added confusion_matrix
+
+import matplotlib.pyplot as plt # New import
+import seaborn as sns # New import
 
 # --- Part 3: Protein Classification with CNN ---
 
@@ -112,6 +115,8 @@ optimizer = optim.Adam(model.parameters(), lr=0.001)
 # Training Loop
 num_epochs = 10 # You can adjust this
 print(f"\nTraining CNN for {num_epochs} epochs...")
+train_losses = [] # New list to store training losses
+
 for epoch in range(num_epochs):
     model.train() # Set model to training mode
     running_loss = 0.0
@@ -126,9 +131,15 @@ for epoch in range(num_epochs):
         running_loss += loss.item() * inputs.size(0)
 
     epoch_loss = running_loss / len(train_loader.dataset)
+    train_losses.append(epoch_loss) # Store the loss
     print(f"Epoch {epoch+1}/{num_epochs}, Loss: {epoch_loss:.4f}")
 
 print("\nCNN Training Complete.")
+
+# Save the trained model
+model_save_path = "protein_cnn_model.pth"
+torch.save(model.state_dict(), model_save_path)
+print(f"Trained model saved to {model_save_path}")
 
 # Evaluate the Model
 print("\nEvaluating the CNN model...")
@@ -154,3 +165,26 @@ print("\nClassification Report:")
 print(classification_report(y_true_labels, y_pred_labels))
 
 print("\n--- Protein Classification with CNN Complete ---")
+
+# Plotting Training Loss
+plt.figure(figsize=(10, 6))
+plt.plot(range(1, num_epochs + 1), train_losses, marker='o')
+plt.title('Training Loss Over Epochs')
+plt.xlabel('Epoch')
+plt.ylabel('Loss')
+plt.grid(True)
+plt.savefig('training_loss.png') # Save the plot
+plt.close() # Close the plot to free memory
+print("\nTraining loss plot saved to training_loss.png")
+
+# Plotting Confusion Matrix
+cm = confusion_matrix(y_true_labels, y_pred_labels, labels=label_encoder.classes_)
+plt.figure(figsize=(12, 10))
+sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=label_encoder.classes_, yticklabels=label_encoder.classes_)
+plt.title('Confusion Matrix')
+plt.xlabel('Predicted Label')
+plt.ylabel('True Label')
+plt.tight_layout() # Adjust layout to prevent labels from overlapping
+plt.savefig('confusion_matrix.png') # Save the plot
+plt.close() # Close the plot to free memory
+print("Confusion matrix plot saved to confusion_matrix.png")
