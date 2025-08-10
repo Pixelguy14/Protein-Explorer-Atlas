@@ -46,7 +46,24 @@ except FileNotFoundError:
     print("Dummy DataFrame created.")
 
 # Prepare Features (X) and Target (y)
-X_embeddings = np.vstack(df_processed['ESM2_Embedding'].values).astype(np.float32)
+
+# Convert embeddings from string to numpy array if necessary
+def parse_embedding(val):
+    if isinstance(val, str):
+        val = val.strip()
+        if val.startswith('[') and val.endswith(']'):
+            val = val[1:-1]
+        try:
+            arr = np.fromstring(val, sep=' ')
+            if arr.size == 0:
+                arr = np.fromstring(val, sep=',')
+            return arr
+        except Exception:
+            return np.array(eval(val))
+    return val
+
+embeddings = [parse_embedding(e) for e in df_processed['ESM2_Embedding'].values]
+X_embeddings = np.vstack(embeddings).astype(np.float32)
 X_embeddings_tensor = torch.tensor(X_embeddings).unsqueeze(1)
 
 def split_and_clean_ids(id_string):
@@ -83,8 +100,17 @@ print(f"Number of classes: {num_classes}")
 print(f"ESM2 Embedding dimension: {embedding_dim}")
 print(f"Categorical Feature dimension: {categorical_feature_dim}")
 
+
+# Filtrar clases con solo 1 muestra antes de dividir
+unique, counts = np.unique(y.numpy(), return_counts=True)
+valid_classes = unique[counts > 1]
+valid_idx = np.isin(y.numpy(), valid_classes)
+X_embeddings_tensor_filtered = X_embeddings_tensor[valid_idx]
+X_categorical_combined_filtered = X_categorical_combined[valid_idx]
+y_filtered = y[valid_idx]
+
 X_train_emb, X_test_emb, X_train_cat, X_test_cat, y_train, y_test = train_test_split(
-    X_embeddings_tensor, X_categorical_combined, y, test_size=0.2, random_state=42, stratify=y
+    X_embeddings_tensor_filtered, X_categorical_combined_filtered, y_filtered, test_size=0.2, random_state=42, stratify=y_filtered
 )
 
 train_dataset = TensorDataset(X_train_emb, torch.tensor(X_train_cat), y_train)
@@ -126,7 +152,7 @@ model = ProteinCNN(embedding_dim, categorical_feature_dim, num_classes).to(devic
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=0.001)
 
-num_epochs = 10
+num_epochs = 100
 print(f"\nTraining CNN for {num_epochs} epochs...")
 train_losses = []
 
@@ -163,9 +189,8 @@ with torch.no_grad():
         inputs_emb, inputs_cat, labels = inputs_emb.to(device), inputs_cat.to(device), labels.to(device)
         outputs = model(inputs_emb, inputs_cat)
         _, predicted = torch.max(outputs.data, 1)
-        
         y_true.extend(labels.cpu().numpy())
-y_pred.extend(predicted.cpu().numpy())
+        y_pred.extend(predicted.cpu().numpy())
 
 y_true_labels = label_encoder.inverse_transform(y_true)
 y_pred_labels = label_encoder.inverse_transform(y_pred)
@@ -173,6 +198,81 @@ y_pred_labels = label_encoder.inverse_transform(y_pred)
 print(f"Accuracy: {accuracy_score(y_true_labels, y_pred_labels):.4f}")
 print("\nClassification Report:")
 print(classification_report(y_true_labels, y_pred_labels))
+
+# --- Visualización de métricas ---
+from sklearn.metrics import precision_recall_fscore_support
+
+
+# Definir top_classes (Top 30 clases más frecuentes en y_true_labels)
+from collections import Counter
+top_n = 30
+class_counts = Counter(y_true_labels)
+top_classes = [cls for cls, _ in class_counts.most_common(top_n)]
+
+# Obtener métricas por clase
+precision, recall, f1, support = precision_recall_fscore_support(y_true_labels, y_pred_labels, labels=top_classes, zero_division=0)
+
+# Graficar clasificación (soporte por clase)
+plt.figure(figsize=(12, 6))
+plt.bar(top_classes, support)
+plt.xticks(rotation=90)
+plt.title('Soporte por clase (Top 30)')
+plt.xlabel('Clase')
+plt.ylabel('Número de muestras')
+plt.tight_layout()
+plt.savefig('support_per_class.png')
+plt.close()
+print('Imagen guardada: support_per_class.png')
+
+# Graficar precisión por clase
+plt.figure(figsize=(12, 6))
+plt.bar(top_classes, precision)
+plt.xticks(rotation=90)
+plt.title('Precisión por clase (Top 30)')
+plt.xlabel('Clase')
+plt.ylabel('Precisión')
+plt.tight_layout()
+plt.savefig('precision_per_class.png')
+plt.close()
+print('Imagen guardada: precision_per_class.png')
+
+# Graficar recall por clase
+plt.figure(figsize=(12, 6))
+plt.bar(top_classes, recall)
+plt.xticks(rotation=90)
+plt.title('Recall por clase (Top 30)')
+plt.xlabel('Clase')
+plt.ylabel('Recall')
+plt.tight_layout()
+plt.savefig('recall_per_class.png')
+plt.close()
+print('Imagen guardada: recall_per_class.png')
+
+# Graficar F1-score por clase
+plt.figure(figsize=(12, 6))
+plt.bar(top_classes, f1)
+plt.xticks(rotation=90)
+plt.title('F1-score por clase (Top 30)')
+plt.xlabel('Clase')
+plt.ylabel('F1-score')
+plt.tight_layout()
+plt.savefig('f1_per_class.png')
+plt.close()
+print('Imagen guardada: f1_per_class.png')
+
+# Graficar macro/micro promedios
+macro_precision = np.mean(precision)
+macro_recall = np.mean(recall)
+macro_f1 = np.mean(f1)
+
+plt.figure(figsize=(8, 6))
+plt.bar(['Macro Precision', 'Macro Recall', 'Macro F1'], [macro_precision, macro_recall, macro_f1])
+plt.title('Macro Promedios de Métricas (Top 30)')
+plt.ylim(0, 1)
+plt.tight_layout()
+plt.savefig('macro_metrics.png')
+plt.close()
+print('Imagen guardada: macro_metrics.png')
 
 print("\n--- Protein Classification with CNN Complete ---")
 
@@ -187,12 +287,26 @@ plt.close()
 print("\nTraining loss plot saved to training_loss.png")
 
 cm = confusion_matrix(y_true_labels, y_pred_labels, labels=label_encoder.classes_)
-plt.figure(figsize=(12, 10))
-sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=label_encoder.classes_, yticklabels=label_encoder.classes_)
-plt.title('Confusion Matrix')
+
+# Mostrar solo las 30 clases más frecuentes para evitar sobreposición
+from collections import Counter
+top_n = 30
+class_counts = Counter(y_true_labels)
+top_classes = [cls for cls, _ in class_counts.most_common(top_n)]
+
+# Filtrar matriz de confusión y etiquetas
+cm_top = confusion_matrix(
+    [y if y in top_classes else 'Other' for y in y_true_labels],
+    [y if y in top_classes else 'Other' for y in y_pred_labels],
+    labels=top_classes + ['Other']
+)
+
+plt.figure(figsize=(24, 18))  # Mucho más grande
+sns.heatmap(cm_top, annot=True, fmt='d', cmap='Blues', xticklabels=top_classes + ['Other'], yticklabels=top_classes + ['Other'])
+plt.title('Confusion Matrix (Top 30 Classes + Other)')
 plt.xlabel('Predicted Label')
 plt.ylabel('True Label')
 plt.tight_layout()
 plt.savefig('confusion_matrix.png')
 plt.close()
-print("Confusion matrix plot saved to confusion_matrix.png")
+print("Confusion matrix plot saved to confusion_matrix.png (top 30 classes + Other)")
