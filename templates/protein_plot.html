@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dominios para {{ protein_id }}</title>
+    <title>Domains for {{ protein_id }}</title>
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -174,7 +174,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1><i class="fas fa-puzzle-piece"></i> Dominios de Proteína</h1>
+            <h1><i class="fas fa-puzzle-piece"></i> Protein Domains</h1>
             <h2>{{ protein_id }}</h2>
         </div>
 
@@ -184,7 +184,7 @@
             </div>
         {% elif domains %}
             <div class="info-card">
-                <h3><i class="fas fa-info-circle"></i> Información General</h3>
+                <h3><i class="fas fa-info-circle"></i> General Information</h3>
                 <div class="stats-grid">
                     <div class="stat-item">
                         <div class="stat-value">{{ protein_id }}</div>
@@ -192,11 +192,11 @@
                     </div>
                     <div class="stat-item">
                         <div class="stat-value">{{ domains|length }}</div>
-                        <div class="stat-label">Dominios</div>
+                        <div class="stat-label">Domains</div>
                     </div>
                     <div class="stat-item">
                         <div class="stat-value">{{ domains|sum(attribute='end') - domains|sum(attribute='start') + domains|length }}</div>
-                        <div class="stat-label">Residuos cubiertos</div>
+                        <div class="stat-label">Covered Residues</div>
                     </div>
                 </div>
             </div>
@@ -206,13 +206,13 @@
             </div>
 
             <div class="info-card">
-                <h3><i class="fas fa-table"></i> Detalles de Dominios</h3>
+                <h3><i class="fas fa-table"></i> Domain Details</h3>
                 <div class="domain-info">
                     {% for domain in domains %}
                     <div class="domain-item">
                         <h4>{{ domain.pfam_id }}</h4>
-                        <p><strong>Posición:</strong> {{ domain.start }} - {{ domain.end }}</p>
-                        <p><strong>Longitud:</strong> {{ domain.end - domain.start + 1 }} aa</p>
+                        <p><strong>Position:</strong> {{ domain.start }} - {{ domain.end }}</p>
+                        <p><strong>Length:</strong> {{ domain.end - domain.start + 1 }} aa</p>
                         <p><strong>E-value:</strong> {{ "%.2e"|format(domain.eval) }}</p>
                     </div>
                     {% endfor %}
@@ -222,10 +222,10 @@
             <table class="domains-table">
                 <thead>
                     <tr>
-                        <th>Dominio Pfam</th>
-                        <th>Inicio</th>
-                        <th>Fin</th>
-                        <th>Longitud</th>
+                        <th>Pfam Domain</th>
+                        <th>Start</th>
+                        <th>End</th>
+                        <th>Length</th>
                         <th>E-value</th>
                     </tr>
                 </thead>
@@ -243,19 +243,19 @@
             </table>
         {% else %}
             <div class="error-message">
-                <i class="fas fa-search"></i> No se encontraron dominios para esta proteína.
+                <i class="fas fa-search"></i> No domains were found for this protein.
             </div>
         {% endif %}
     </div>
 
     {% if domains %}
     <script>
-    // Datos de dominios pasados desde Flask
+    // Domain data passed from Flask
     var domains = {{ domains|tojson }};
     
-    // Verificar que tenemos datos válidos
+    // Check if we have valid data
     if (domains && domains.length > 0) {
-        // Crear gráfico de barras horizontales para dominios
+        // Create horizontal bar chart for domains
         var data = [{
             type: 'bar',
             y: domains.map(function(d) { return d.pfam_id; }),
@@ -271,22 +271,22 @@
                 }
             },
             hovertemplate: '<b>%{y}</b><br>' +
-                          'Posición: %{text}<br>' +
-                          'Longitud: %{x} aa<br>' +
+                          'Position: %{text}<br>' +
+                          'Length: %{x} aa<br>' +
                           '<extra></extra>'
         }];
 
         var layout = {
             title: {
-                text: 'Distribución de Dominios por Longitud',
+                text: 'Domain Distribution by Length',
                 font: { size: 16, color: '#333' }
             },
             xaxis: {
-                title: 'Longitud del Dominio (aminoácidos)',
+                title: 'Domain Length (amino acids)',
                 gridcolor: '#f0f0f0'
             },
             yaxis: {
-                title: 'Dominio Pfam',
+                title: 'Pfam Domain',
                 gridcolor: '#f0f0f0'
             },
             plot_bgcolor: '#fafafa',
@@ -304,7 +304,7 @@
 
         Plotly.newPlot('plot', data, layout, config);
 
-        // Crear segundo gráfico - timeline de dominios
+        // Create second chart - domain timeline
         var timelineData = [{
             type: 'scatter',
             mode: 'markers+text',
@@ -318,11 +318,11 @@
                 line: { color: 'white', width: 2 }
             },
             hovertemplate: '<b>%{text}</b><br>' +
-                          'Centro: %{x}<br>' +
+                          'Center: %{x}<br>' +
                           '<extra></extra>'
         }];
 
-        // Agregar líneas para mostrar extensión de dominios
+        // Add lines to show domain extension
         domains.forEach(function(domain, i) {
             timelineData.push({
                 type: 'scatter',
@@ -340,15 +340,15 @@
 
         var timelineLayout = {
             title: {
-                text: 'Timeline de Dominios en la Secuencia',
+                text: 'Domain Timeline on the Sequence',
                 font: { size: 16, color: '#333' }
             },
             xaxis: {
-                title: 'Posición en la Secuencia',
+                title: 'Position in Sequence',
                 gridcolor: '#f0f0f0'
             },
             yaxis: {
-                title: 'Dominios',
+                title: 'Domains',
                 tickmode: 'array',
                 tickvals: domains.map(function(d, i) { return i; }),
                 ticktext: domains.map(function(d) { return d.pfam_id; }),
@@ -360,7 +360,7 @@
             height: Math.max(300, domains.length * 50)
         };
 
-        // Crear contenedor para segundo gráfico
+        // Create container for the second chart
         var timelineContainer = document.createElement('div');
         timelineContainer.id = 'timeline-plot';
         timelineContainer.style.marginTop = '20px';
@@ -368,8 +368,8 @@
 
         Plotly.newPlot('timeline-plot', timelineData, timelineLayout, config);
     } else {
-        // Mostrar mensaje cuando no hay datos
-        document.getElementById('plot').innerHTML = '<div style="text-align: center; padding: 50px; color: #666;"><i class="fas fa-exclamation-circle" style="font-size: 2rem; margin-bottom: 15px;"></i><br><h3>No hay datos de dominios para mostrar</h3></div>';
+        // Show message when there is no data
+        document.getElementById('plot').innerHTML = '<div style="text-align: center; padding: 50px; color: #666;"><i class="fas fa-exclamation-circle" style="font-size: 2rem; margin-bottom: 15px;"></i><br><h3>No domain data to display</h3></div>';
     }
     </script>
     {% else %}
@@ -377,7 +377,7 @@
     document.addEventListener('DOMContentLoaded', function() {
         var plot = document.getElementById('plot');
         if (plot) {
-            plot.innerHTML = '<div style="text-align: center; padding: 50px; color: #666;"><i class="fas fa-search" style="font-size: 2rem; margin-bottom: 15px;"></i><br><h3>No se encontraron dominios</h3><p>Intenta con otra proteína.</p></div>';
+            plot.innerHTML = '<div style="text-align: center; padding: 50px; color: #666;"><i class="fas fa-search" style="font-size: 2rem; margin-bottom: 15px;"></i><br><h3>No domains found</h3><p>Try with another protein.</p></div>';
         }
     });
     </script>

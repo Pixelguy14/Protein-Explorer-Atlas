@@ -7,6 +7,7 @@ import random
 from datetime import datetime
 from werkzeug.utils import secure_filename
 import logging
+import json
 
 app = Flask(__name__)
 
@@ -16,9 +17,28 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB
 ALLOWED_EXTENSIONS = {'fasta', 'fa', 'pdb', 'txt'}
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-# Logger simple
+# Simple logger
 logging.basicConfig(level=logging.INFO)
 logger = app.logger
+
+# --- Global Predictions Database ---
+PREDICTIONS_DB = {}
+
+def load_predictions(file_path='predictions.json'):
+    """Loads predictions from the JSON file into a sequence-keyed dictionary."""
+    global PREDICTIONS_DB
+    try:
+        with open(file_path, 'r') as f:
+            predictions = json.load(f)
+        # Key by sequence for easy lookup
+        PREDICTIONS_DB = {item['sequence']: item for item in predictions}
+        logger.info(f"Successfully loaded {len(PREDICTIONS_DB)} predictions from {file_path}")
+    except FileNotFoundError:
+        logger.error(f"FATAL: {file_path} not found. Please run predict_all.py to generate it.")
+        PREDICTIONS_DB = {}
+    except json.JSONDecodeError:
+        logger.error(f"FATAL: Could not decode {file_path}. It might be corrupted.")
+        PREDICTIONS_DB = {}
 
 
 # --- Helpers ---
@@ -28,12 +48,12 @@ def allowed_file(filename: str) -> bool:
 
 def extract_protein_id_from_header(header: str | None) -> str | None:
     """
-    Intenta extraer un UniProt Accession o ID del encabezado FASTA.
-    Soporta:
+    Tries to extract a UniProt Accession or ID from the FASTA header.
+    Supports:
       >sp|P12345|NAME ...
       >tr|Q9ABC1|NAME ...
-      >P12345 texto...
-      >ALGUN_ID texto...
+      >P12345 text...
+      >SOME_ID text...
     """
     if not header:
         return None
@@ -52,9 +72,9 @@ def extract_protein_id_from_header(header: str | None) -> str | None:
 
 def parse_protein_file(file_path: str) -> tuple[str | None, str | None]:
     """
-    Lee un archivo de proteína. Devuelve (sequence_upper, protein_id).
-    - Si es FASTA, toma la primera secuencia.
-    - Si es texto plano, compacta y lo usa como secuencia.
+    Reads a protein file. Returns (sequence_upper, protein_id).
+    - If FASTA, it takes the first sequence.
+    - If plain text, it compacts it and uses it as the sequence.
     """
     try:
         with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
@@ -63,10 +83,10 @@ def parse_protein_file(file_path: str) -> tuple[str | None, str | None]:
         if content.startswith('>'):
             lines = content.splitlines()
             header = lines[0] if lines else None
-            # Toma solo la primera secuencia
+            # Take only the first sequence
             seq_lines = []
             for line in lines[1:]:
-                if line.startswith('>'):  # nueva entrada FASTA, rompemos
+                if line.startswith('>'):  # new FASTA entry, break
                     break
                 seq_lines.append(line.strip())
             sequence = ''.join(seq_lines)
@@ -77,36 +97,22 @@ def parse_protein_file(file_path: str) -> tuple[str | None, str | None]:
         sequence = sequence.upper() if sequence else None
         return sequence, protein_id
     except Exception as e:
-        logger.exception("Error al leer archivo de proteína: %s", e)
+        logger.exception("Error reading protein file: %s", e)
         return None, None
 
 
 def predict_protein_family(sequence: str):
     """
-    Simulación de predicción (reemplaza por tu modelo real).
-    Devuelve una lista de familias con un pdb_id ejemplo y métricas fake.
+    Looks up a protein sequence in the pre-computed predictions database.
+    Returns the prediction data if found, otherwise None.
     """
-    families = [
-        {'family': 'Immunoglobulin',     'confidence': 0.92, 'pdb_id': '1IGY', 'description': 'Antibody heavy chain'},
-        {'family': 'Kinase',             'confidence': 0.87, 'pdb_id': '1ATP', 'description': 'Protein kinase domain'},
-        {'family': 'Helix-turn-helix',   'confidence': 0.78, 'pdb_id': '1HTH', 'description': 'DNA-binding domain'},
-        {'family': 'Beta-barrel',        'confidence': 0.65, 'pdb_id': '1BBL', 'description': 'Membrane protein'},
-        {'family': 'Zinc finger',        'confidence': 0.58, 'pdb_id': '1ZNF', 'description': 'DNA-binding protein'}
-    ]
-    metrics = {
-        'accuracy': 0.94,
-        'precision': 0.91,
-        'recall': 0.89,
-        'f1_score': 0.90,
-        'processing_time': round(random.uniform(0.5, 2.0), 3)
-    }
-    return families, metrics
+    return PREDICTIONS_DB.get(sequence)
 
 
 def get_domains_for_protein(protein_id: str):
     """
-    Devuelve dominios de ejemplo para graficar (sustituye por tu integración real con Pfam/InterPro).
-    Genera 1-3 dominios con posiciones coherentes.
+    Returns example domains for plotting (replace with your actual Pfam/InterPro integration).
+    Generates 1-3 domains with coherent positions.
     """
     if not protein_id:
         return []
@@ -124,7 +130,7 @@ def get_domains_for_protein(protein_id: str):
             "pfam_id": f"PF{rnd.randint(1000, 9999)}",
             "start": start,
             "end": end,
-            "eval": float(10 ** (-rnd.randint(2, 8)))  # e-values entre 1e-2 y 1e-8 aprox
+            "eval": float(10 ** (-rnd.randint(2, 8)))  # e-values between 1e-2 and 1e-8 approx
         })
     return domains
 
@@ -132,7 +138,7 @@ def get_domains_for_protein(protein_id: str):
 # --- Routes ---
 @app.route('/')
 def index():
-    # Asegúrate de tener templates/index.html o cambia esta ruta a tu landing real
+    # Make sure you have templates/index.html or change this route to your actual landing page
     return render_template('index.html')
 
 
@@ -140,65 +146,83 @@ def index():
 def predict():
     try:
         if 'protein_file' not in request.files:
-            return jsonify({'success': False, 'error': 'No se encontró archivo'}), 400
+            return jsonify({'success': False, 'error': 'No file found'}), 400
 
         file = request.files['protein_file']
         if file.filename == '':
-            return jsonify({'success': False, 'error': 'No se seleccionó archivo'}), 400
+            return jsonify({'success': False, 'error': 'No file selected'}), 400
 
         if not (file and allowed_file(file.filename)):
-            return jsonify({'success': False, 'error': 'Tipo de archivo no permitido'}), 400
+            return jsonify({'success': False, 'error': 'File type not allowed'}), 400
 
         filename = secure_filename(file.filename)
         filename = f"{datetime.now().strftime('%Y%m%d_%H%M%S_')}{filename}"
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(file_path)
 
-        sequence, protein_id = parse_protein_file(file_path)
-        # Limpia el archivo temporal
+        sequence, protein_id_from_header = parse_protein_file(file_path)
+        # Clean up the temporary file
         try:
             os.remove(file_path)
         except Exception:
             pass
 
         if not sequence:
-            return jsonify({'success': False, 'error': 'No se pudo leer la secuencia de proteína'}), 400
+            return jsonify({'success': False, 'error': 'Could not read protein sequence'}), 400
 
-        # Fallback si no hay protein_id en el FASTA
-        if not protein_id:
-            protein_id = f"anon-{hashlib.md5(sequence.encode()).hexdigest()[:8]}"
+        # --- Prediction using the loaded database ---
+        prediction_result = predict_protein_family(sequence)
 
-        families, metrics = predict_protein_family(sequence)
+        if not prediction_result:
+            return jsonify({
+                'success': False,
+                'error': 'Protein sequence not found in our pre-computed database.'
+            }), 404
+
+        # Use the protein_id from the header if available, otherwise from the database
+        protein_id = protein_id_from_header or prediction_result.get('protein_id')
+
+        # Structure the response to match the frontend's expectations
+        families = [{
+            'family': prediction_result.get('predicted_class'),
+            'confidence': prediction_result.get('confidence'),
+            'pdb_id': '1ATP',  # Placeholder PDB ID
+            'description': f"Predicted class: {prediction_result.get('predicted_class')}"
+        }]
+        
+        metrics = {
+            'processing_time': round(random.uniform(0.01, 0.05), 4) # It's just a lookup now
+        }
 
         return jsonify({
             'success': True,
             'sequence_length': len(sequence),
-            'protein_id': protein_id,     # snake_case
-            'proteinId': protein_id,      # camelCase (por si tu front lo espera así)
+            'protein_id': protein_id,
+            'proteinId': protein_id,
             'families': families,
             'metrics': metrics,
             'timestamp': datetime.now().isoformat()
         })
 
     except Exception as e:
-        logger.exception("Error en /predict: %s", e)
-        return jsonify({'success': False, 'error': f'Error en el procesamiento: {str(e)}'}), 500
+        logger.exception("Error in /predict: %s", e)
+        return jsonify({'success': False, 'error': f'Processing error: {str(e)}'}), 500
 
 
 @app.get('/plot/<protein_id>')
 def plot_view(protein_id: str):
     if not protein_id or protein_id.lower() == 'undefined':
-        logger.warning("plot_view: protein_id inválido: %r", protein_id)
+        logger.warning("plot_view: invalid protein_id: %r", protein_id)
         return render_template(
             'protein_plot.html',
             protein_id=protein_id,
             domains=[],
-            error="Falta el UniProt ID (protein_id) para graficar."
+            error="A UniProt ID (protein_id) is required to plot."
         ), 400
 
     domains = get_domains_for_protein(protein_id)
 
-    # Renderiza aunque no haya dominios; tu template muestra el mensaje bonito
+    # Render even if there are no domains; your template shows the nice message
     return render_template(
         'protein_plot.html',
         protein_id=protein_id,
@@ -210,27 +234,28 @@ def plot_view(protein_id: str):
 @app.get('/structure/<pdb_id>')
 def structure_view(pdb_id: str):
     if not pdb_id or pdb_id.lower() == 'undefined':
-        logger.warning("structure_view: pdb_id inválido: %r", pdb_id)
-        return ("Se requiere un PDB ID válido (no 'undefined').", 400)
+        logger.warning("structure_view: invalid pdb_id: %r", pdb_id)
+        return ("A valid PDB ID is required (not 'undefined').", 400)
 
-    # PDB ID clásico: 4 caracteres alfanuméricos (ej. 1CRN)
+    # Classic PDB ID: 4 alphanumeric characters (e.g., 1CRN)
     if re.fullmatch(r'[A-Za-z0-9]{4}', pdb_id):
         return redirect(f'https://www.rcsb.org/structure/{pdb_id}')
 
-    return ("Se requiere un PDB ID de 4 caracteres (ej. 1CRN). "
-            "Si quieres soportar otros tipos de ID, ajusta la ruta.", 400)
+    return ("A 4-character PDB ID is required (e.g., 1CRN). "
+            "If you want to support other ID types, adjust the route.", 400)
 
 @app.get('/view3d/<pdb_id>')
 def view3d(pdb_id: str):
-    """Renderiza la página de visualización 3D con un PDB ID."""
+    """Renders the 3D visualization page with a PDB ID."""
     if not pdb_id or not re.fullmatch(r'[A-Za-z0-9]{4}', pdb_id):
-        return "PDB ID inválido. Se requiere un ID de 4 caracteres.", 400
+        return "Invalid PDB ID. A 4-character ID is required.", 400
     
-    # Pasamos el PDB ID a la plantilla. El protein_id no es directamente conocido aquí,
-    # pero podemos pasarlo si es necesario en el futuro.
+    # We pass the PDB ID to the template. The protein_id is not directly known here,
+    # but we can pass it if needed in the future.
     return render_template('structure_view.html', pdb_id=pdb_id, protein_id=None)
 
 # --- Entry point ---
 if __name__ == '__main__':
-    # Cambia host/port si lo necesitas
+    load_predictions() # Load the prediction data on startup
+    # Change host/port if you need to
     app.run(debug=True, host='127.0.0.1', port=5000)

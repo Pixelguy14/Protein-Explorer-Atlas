@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Clasificador de Familias de Proteínas</title>
+    <title>Protein Family Classifier</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         * {
@@ -528,55 +528,55 @@
 </head>
 <body>
     <div class="container">
-         Header 
+        <!-- Header -->
         <header class="header">
             <div class="header-content">
                 <i class="fas fa-dna header-icon"></i>
-                <h1>Clasificador de Familias de Proteínas</h1>
-                <p>Análisis avanzado de secuencias proteicas usando Machine Learning</p>
+                <h1>Protein Family Classifier</h1>
+                <p>Advanced analysis of protein sequences using Machine Learning</p>
             </div>
         </header>
 
-         Upload Section 
+        <!-- Upload Section -->
         <section class="upload-section">
             <div class="upload-card">
-                <h2><i class="fas fa-upload"></i> Cargar Archivo de Proteína</h2>
+                <h2><i class="fas fa-upload"></i> Upload Protein File</h2>
                 <form id="proteinForm" enctype="multipart/form-data">
                     <div class="file-input-container">
                         <input type="file" id="proteinFile" name="protein_file" accept=".fasta,.fa,.pdb,.txt" required>
                         <label for="proteinFile" class="file-input-label">
                             <i class="fas fa-cloud-upload-alt"></i>
-                            <span>Seleccionar archivo (.fasta, .fa, .pdb, .txt)</span>
+                            <span>Select file (.fasta, .fa, .pdb, .txt)</span>
                         </label>
                     </div>
                     <button type="submit" class="process-btn" id="processBtn">
                         <i class="fas fa-cogs"></i>
-                        Procesar Proteína
+                        Process Protein
                     </button>
                 </form>
             </div>
         </section>
 
-         Loading Section 
+        <!-- Loading Section -->
         <section class="loading-section" id="loadingSection" style="display: none;">
             <div class="loading-card">
                 <div class="spinner"></div>
-                <p>Analizando secuencia proteica...</p>
+                <p>Analyzing protein sequence...</p>
             </div>
         </section>
 
-         Results Section 
+        <!-- Results Section -->
         <section class="results-section" id="resultsSection" style="display: none;">
-             Sequence Info 
+            <!-- Sequence Info -->
             <div class="info-card">
-                <h3><i class="fas fa-info-circle"></i> Información de la Secuencia</h3>
+                <h3><i class="fas fa-info-circle"></i> Sequence Information</h3>
                 <div class="info-grid">
                     <div class="info-item">
-                        <span class="info-label">Longitud:</span>
+                        <span class="info-label">Length:</span>
                         <span class="info-value" id="sequenceLength">-</span>
                     </div>
                     <div class="info-item">
-                        <span class="info-label">Procesado:</span>
+                        <span class="info-label">Processed:</span>
                         <span class="info-value" id="processTime">-</span>
                     </div>
                     <div class="info-item">
@@ -586,18 +586,18 @@
                 </div>
             </div>
 
-             Similar Proteins Table 
+            <!-- Similar Proteins Table -->
             <div class="results-card">
-                <h3><i class="fas fa-table"></i> Familias de Proteínas Similares</h3>
+                <h3><i class="fas fa-table"></i> Similar Protein Families</h3>
                 <div class="table-container">
                     <table class="results-table" id="familiesTable">
                         <thead>
                             <tr>
-                                <th>Familia</th>
-                                <th>Confianza</th>
+                                <th>Family</th>
+                                <th>Confidence</th>
                                 <th>PDB ID</th>
-                                <th>Descripción</th>
-                                <th>Acciones</th>
+                                <th>Description</th>
+                                <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -606,14 +606,14 @@
                 </div>
             </div>
 
-             Metrics Section 
+            <!-- Metrics Section -->
             <div class="metrics-section">
                 <div class="metrics-card">
-                    <h3><i class="fas fa-chart-bar"></i> Métricas de Precisión</h3>
+                    <h3><i class="fas fa-chart-bar"></i> Accuracy Metrics</h3>
                     <div class="metrics-grid">
                         <div class="metric-item">
                             <div class="metric-value" id="accuracyValue">-</div>
-                            <div class="metric-label">Precisión</div>
+                            <div class="metric-label">Accuracy</div>
                             <div class="metric-bar">
                                 <div class="metric-fill" id="accuracyBar"></div>
                             </div>
@@ -642,35 +642,35 @@
                     </div>
                 </div>
 
-                 Performance Card 
+                <!-- Performance Card -->
                 <div class="performance-card">
-                    <h3><i class="fas fa-tachometer-alt"></i> Rendimiento</h3>
+                    <h3><i class="fas fa-tachometer-alt"></i> Performance</h3>
                     <div class="performance-item">
                         <i class="fas fa-clock"></i>
-                        <span>Tiempo de procesamiento:</span>
+                        <span>Processing time:</span>
                         <span class="performance-value" id="processingTime">-</span>
                     </div>
                     <div class="performance-item">
                         <i class="fas fa-server"></i>
-                        <span>Estado del modelo:</span>
-                        <span class="performance-value status-active">Activo</span>
+                        <span>Model status:</span>
+                        <span class="performance-value status-active">Active</span>
                     </div>
                 </div>
             </div>
         </section>
     </div>
 
-     The Modal 
+    <!-- The Modal -->
     <div id="infoModal" class="modal-overlay">
         <div class="modal-content">
             <div class="modal-header">
-                <h2 id="modalTitle"><i class="fas fa-chart-bar"></i> Visualización</h2>
+                <h2 id="modalTitle"><i class="fas fa-chart-bar"></i> Visualization</h2>
                 <span class="modal-close-btn">&times;</span>
             </div>
             <div class="modal-body">
                 <div class="modal-loading" id="modalLoading">
                     <div class="spinner"></div>
-                    <p>Cargando visualización...</p>
+                    <p>Loading visualization...</p>
                 </div>
                 <iframe id="modalIframe" class="modal-iframe" src="about:blank" style="display: none;"></iframe>
             </div>
@@ -699,7 +699,7 @@
                 const file = e.target.files[0];
                 if (file) {
                     const label = document.querySelector(".file-input-label span");
-                    label.textContent = `Archivo seleccionado: ${file.name}`;
+                    label.textContent = `File selected: ${file.name}`;
                     label.style.color = "#4CAF50";
                 }
             });
@@ -712,7 +712,7 @@
                 const file = fileInput.files[0];
 
                 if (!file) {
-                    alert("Por favor selecciona un archivo");
+                    alert("Please select a file");
                     return;
                 }
 
@@ -722,7 +722,7 @@
                 loadingSection.style.display = "block";
                 resultsSection.style.display = "none";
                 processBtn.disabled = true;
-                processBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Procesando...';
+                processBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
 
                 try {
                     const response = await fetch("/predict", {
@@ -736,14 +736,14 @@
                         currentProteinId = data.protein_id || data.proteinId;
                         displayResults(data);
                     } else {
-                        throw new Error(data.error || "Error desconocido");
+                        throw new Error(data.error || "Unknown error");
                     }
                 } catch (error) {
                     alert(`Error: ${error.message}`);
                 } finally {
                     loadingSection.style.display = "none";
                     processBtn.disabled = false;
-                    processBtn.innerHTML = '<i class="fas fa-cogs"></i> Procesar Proteína';
+                    processBtn.innerHTML = '<i class="fas fa-cogs"></i> Process Protein';
                 }
             });
 
@@ -752,7 +752,7 @@
                 resultsSection.style.display = "block";
 
                 // Update sequence info
-                document.getElementById("sequenceLength").textContent = `${data.sequence_length} aminoácidos`;
+                document.getElementById("sequenceLength").textContent = `${data.sequence_length} amino acids`;
                 document.getElementById("processTime").textContent = new Date(data.timestamp).toLocaleString();
                 document.getElementById("proteinId").textContent = currentProteinId || "N/A";
 
@@ -777,7 +777,7 @@
                                 <i class="fas fa-eye"></i> PDB
                             </button>
                             <button class="view-btn btn-secondary" onclick="viewDomains('${currentProteinId}')">
-                                <i class="fas fa-puzzle-piece"></i> Dominios
+                                <i class="fas fa-puzzle-piece"></i> Domains
                             </button>
                             <button class="view-btn btn-tertiary" onclick="view3D('${family.pdb_id}')">
                                 <i class="fas fa-cube"></i> 3D
@@ -826,10 +826,10 @@
                     modalIframe.style.display = "block";
                 };
 
-                // Timeout para mostrar error si tarda mucho
+                // Timeout to show error if it takes too long
                 setTimeout(() => {
                     if (modalLoading.style.display !== "none") {
-                        modalLoading.innerHTML = '<i class="fas fa-exclamation-triangle" style="font-size: 2rem; color: #ff5722; margin-bottom: 10px;"></i><p>Error al cargar la visualización</p>';
+                        modalLoading.innerHTML = '<i class="fas fa-exclamation-triangle" style="font-size: 2rem; color: #ff5722; margin-bottom: 10px;"></i><p>Error loading visualization</p>';
                     }
                 }, 10000);
             }
@@ -846,22 +846,22 @@
 
             window.viewDomains = function(proteinId) {
                 if (!proteinId || proteinId === 'undefined') {
-                    alert('No se pudo obtener el ID de la proteína');
+                    alert('Could not get protein ID');
                     return;
                 }
                 openModal(
-                    '<i class="fas fa-puzzle-piece"></i> Dominios de Proteína', 
+                    '<i class="fas fa-puzzle-piece"></i> Protein Domains', 
                     `/plot/${proteinId}`
                 );
             };
 
             window.view3D = function(pdbId) {
                 if (!pdbId || pdbId === 'undefined') {
-                    alert('No se pudo obtener el PDB ID');
+                    alert('Could not get PDB ID');
                     return;
                 }
                 openModal(
-                    '<i class="fas fa-cube"></i> Estructura 3D', 
+                    '<i class="fas fa-cube"></i> 3D Structure', 
                     `/view3d/${pdbId}`
                 );
             };

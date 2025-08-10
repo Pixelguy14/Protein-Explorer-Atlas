@@ -1,3 +1,4 @@
 HPA_Explorer/
 data/
 Processed_datasets/cleaned_and_embedded_protein_data.tsv
+Processed_datasets/enriched_protein_data.tsv

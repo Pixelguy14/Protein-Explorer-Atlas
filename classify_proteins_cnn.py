@@ -17,7 +17,7 @@ print("\n--- Starting Protein Classification with CNN ---")
 
 # Load the processed data (assuming it's saved from previous steps)
 try:
-    df_processed = pd.read_csv("cleaned_and_embedded_protein_data.tsv", sep='\t')
+    df_processed = pd.read_csv("Processed_datasets/cleaned_and_embedded_protein_data.tsv", sep='\t')
     print("Loaded cleaned and embedded data from 'cleaned_and_embedded_protein_data.tsv'.")
 except FileNotFoundError:
     print("Error: 'cleaned_and_embedded_protein_data.tsv' not found. Please ensure you saved the output from 'process_and_embed.py'.")
@@ -175,9 +175,16 @@ for epoch in range(num_epochs):
 
 print("\nCNN Training Complete.")
 
-model_save_path = "protein_cnn_model.pth"
+model_save_path = "Training_results/protein_cnn_model.pth"
 torch.save(model.state_dict(), model_save_path)
 print(f"Trained model saved to {model_save_path}")
+
+import joblib
+print("\nSaving encoders and binarizers...")
+joblib.dump(label_encoder, 'Training_results/label_encoder.joblib')
+joblib.dump(mlb_pfam, 'Training_results/mlb_pfam.joblib')
+joblib.dump(mlb_go, 'Training_results/mlb_go.joblib')
+print("Encoders and binarizers saved to 'Training_results/'.")
 
 print("\nEvaluating the CNN model...")
 model.eval()
