@@ -2,20 +2,27 @@
 # -*- coding: utf-8 -*-
 """
 Cruza un archivo Pfam (csv/tsv) con un FASTA de UniProt y produce un CSV:
-    accession, pfamA_acc, sequence, used_region, seq_start, seq_end
+    accession, pfamA_acc, sequence, used_region, seq_start, seq_end, length
 
-- Requiere en el archivo Pfam las columnas: pfamseq_acc, pfamA_acc
-  (opcionales: seq_start, seq_end para recortar al dominio).
-- FASTA: cabeceras tipo >sp|A0A437CBF4|... o >A0A437CBF4 ...
+- Pfam: columnas mínimas -> pfamseq_acc, pfamA_acc (opcionales: seq_start, seq_end)
+- FASTA: headers tipo >sp|A0A437CBF4|... o >A0A437CBF4 ...
 
-Uso:
-    python build_dataset_from_pfam_fasta.py --pfam [Nombre de archivo no fasta].csv --fasta [Nombre de archivo fasta].fasta --out dataset.csv --use domain || Este es el importante.
-    python build_dataset_from_pfam_fasta.py --pfam pfam_map.csv --fasta sequences.fasta --out dataset_full.csv --use full
+Puedes definir rutas aquí abajo, o pasarlas por CLI para sobrescribir.
 """
-import csv, argparse, sys, re
+
+import csv, argparse, re
 from pathlib import Path
 
+# =========== CONFIGURACIÓN POR CÓDIGO ===========
+# (Edita estas rutas a las tuyas; USE_MODE: "domain" o "full")
+PFAM_FILE   = r".\test_files\pfam_map.csv"
+FASTA_FILE  = r".\test_files\sequences.fasta"
+OUTPUT_FILE = r".\dataset.csv"
+USE_MODE    = "domain"
+# ================================================
+
 def sniff_delimiter(p: Path):
+    # Lee primera línea con utf-8-sig para tragarse el BOM si existe
     with p.open("r", encoding="utf-8-sig", errors="ignore") as f:
         first = f.readline()
     if "\t" in first and (first.count("\t") >= first.count(",")):
@@ -33,7 +40,7 @@ def read_pfam_table(p: Path):
         if not need.issubset(set(r.fieldnames)):
             raise SystemExit(f"El archivo Pfam debe incluir columnas: {need}. Encontradas: {r.fieldnames}")
         for row in r:
-            # Normaliza claves del row (por si el BOM vino en los datos)
+            # Normaliza claves y valores
             row = {k.lstrip("\ufeff").strip(): (v or "").strip() for k, v in row.items()}
             acc = row.get("pfamseq_acc", "")
             fam = row.get("pfamA_acc", "")
@@ -49,8 +56,8 @@ ACC_RE = re.compile(r"^>?([^|>]*\|)?(?P<acc>[A-Z0-9]+)(\|[^ ]*)?")
 
 def parse_fasta(fasta_path: Path):
     """
-    Devuelve dict acc -> sequence (solo letras A-Z).
-    Intenta extraer la accession del header: >sp|A0A...|..., >tr|..., o >A0A...
+    Devuelve dict acc -> sequence (A-Z). Extrae accession de:
+    >sp|A0A...|..., >tr|..., o >A0A...
     """
     acc2seq = {}
     acc = None
@@ -67,6 +74,7 @@ def parse_fasta(fasta_path: Path):
                 m = ACC_RE.match(line[1:])
                 acc = m.group("acc") if m else None
             else:
+                # Mantén solo letras (aminoácidos). Deja X/B/Z si aparecen.
                 seq_chunks.append(re.sub(r"[^A-Za-z]", "", line).upper())
         if acc and seq_chunks:
             acc2seq.setdefault(acc, "".join(seq_chunks))
@@ -74,8 +82,8 @@ def parse_fasta(fasta_path: Path):
 
 def slice_domain(seq, start, end):
     """
-    Pfam suele indexar 1-based e inclusivo. Convertimos a 0-based Python.
-    Si faltan límites, regresa secuencia completa.
+    Pfam usa 1-based e inclusivo. Convertimos a 0-based (fin exclusivo).
+    Si faltan límites -> secuencia completa.
     """
     if start is None or end is None:
         return seq, "full"
@@ -86,19 +94,25 @@ def slice_domain(seq, start, end):
     return seq[i0:i1], "domain"
 
 def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--pfam", required=True, help="CSV/TSV con columnas pfamseq_acc, pfamA_acc, (opcionales) seq_start, seq_end")
-    ap.add_argument("--fasta", required=True, help="FASTA con secuencias UniProt")
-    ap.add_argument("--out", default="dataset.csv", help="CSV de salida")
-    ap.add_argument("--use", choices=["full", "domain"], default="domain",
-                    help="full = usar secuencia completa; domain = recortar por seq_start/seq_end si existen")
+    # CLI opcional: sobrescribe los valores definidos por código
+    ap = argparse.ArgumentParser(add_help=True)
+    ap.add_argument("--pfam",  default=PFAM_FILE,   help="CSV/TSV con pfamseq_acc, pfamA_acc, (opc.) seq_start, seq_end")
+    ap.add_argument("--fasta", default=FASTA_FILE,  help="FASTA con secuencias UniProt")
+    ap.add_argument("--out",   default=OUTPUT_FILE, help="CSV de salida")
+    ap.add_argument("--use",   choices=["full","domain"], default=USE_MODE,
+                    help="full = secuencia completa; domain = recorte por seq_start/seq_end si existen")
     args = ap.parse_args()
 
-    pfam_path = Path(args.pfam)
+    pfam_path  = Path(args.pfam)
     fasta_path = Path(args.fasta)
+    out_path   = Path(args.out)
+
     if not pfam_path.exists() or not fasta_path.exists():
         raise SystemExit("No encuentro los archivos de entrada.")
 
+    print(f"[INFO] Pfam:  {pfam_path}")
+    print(f"[INFO] FASTA: {fasta_path}")
+    print(f"[INFO] Modo:  {args.use}")
     print("[INFO] Leyendo Pfam…")
     pf_rows = read_pfam_table(pfam_path)
     print(f"[INFO] Registros Pfam: {len(pf_rows)}")
@@ -108,7 +122,8 @@ def main():
     print(f"[INFO] Secuencias en FASTA: {len(acc2seq)}")
 
     kept, missing_seq, empty_cut = 0, 0, 0
-    with open(args.out, "w", newline="", encoding="utf-8") as fo:
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with out_path.open("w", newline="", encoding="utf-8") as fo:
         w = csv.writer(fo)
         w.writerow(["accession","pfamA_acc","sequence","used_region","seq_start","seq_end","length"])
         for r in pf_rows:
@@ -128,7 +143,7 @@ def main():
             w.writerow([acc, fam, out_seq, used, r["seq_start"], r["seq_end"], len(out_seq)])
             kept += 1
 
-    print(f"[OK] Escrito: {args.out}")
+    print(f"[OK] Escrito: {out_path}")
     print(f"[STATS] Filas guardadas: {kept}")
     print(f"[STATS] Sin secuencia en FASTA: {missing_seq}")
     if args.use == "domain":
