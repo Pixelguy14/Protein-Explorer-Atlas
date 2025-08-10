@@ -17,7 +17,7 @@ def parse_pfam_regions(pfam_regions_file):
     Parses the Pfam-A.regions.tsv file to extract Pfam family information.
     """
     # Assuming tab-separated and relevant columns are 'pfamseq_acc' and 'pfamA_acc'
-    df = pd.read_csv(pfam_regions_file, sep='\t', usecols=['pfamseq_acc', 'pfamA_acc'], engine='python')
+    df = pd.read_csv(pfam_regions_file, sep='\t', usecols=['pfamseq_acc', 'pfamA_acc'], engine='c')
     df.rename(columns={'pfamseq_acc': 'UniProt_ID', 'pfamA_acc': 'Pfam_Family_ID'}, inplace=True)
     return df
 
@@ -26,7 +26,7 @@ def parse_protein_atlas(protein_atlas_file):
     Parses the proteinatlas.tsv file to extract relevant annotations.
     """
     # Assuming tab-separated and relevant columns are 'Uniprot' and 'Protein class', 'Biological process', 'Molecular function'
-    df = pd.read_csv(protein_atlas_file, sep='\t', usecols=['Uniprot', 'Protein class', 'Biological process', 'Molecular function'], engine='python')
+    df = pd.read_csv(protein_atlas_file, sep='\t', usecols=['Uniprot', 'Protein class', 'Biological process', 'Molecular function'], engine='c')
     df.rename(columns={'Uniprot': 'UniProt_ID'}, inplace=True)
     return df
 
