@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Estructura 3D - {{ pdb_id }}</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://3dmol.org/build/3Dmol-min.js"></script>
+    <style>
+        body {
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            background: #f8f9fa;
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 100%;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            padding: 25px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+            color: #333;
+        }
+        
+        .header h1 {
+            color: #4caf50;
+            margin-bottom: 5px;
+            font-size: 1.8rem;
+        }
+        
+        .header h2 {
+            color: #666;
+            font-size: 1.2rem;
+            font-weight: normal;
+        }
+
+        #viewer-container {
+            width: 100%;
+            height: 500px;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            position: relative;
+            background: linear-gradient(135deg, #f0f0f0, #e0e0e0);
+            margin-bottom: 20px;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin: 15px 0;
+            flex-wrap: wrap;
+        }
+
+        .control-btn {
+            padding: 8px 16px;
+            background: #4caf50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .control-btn:hover {
+            background: #45a049;
+            transform: translateY(-1px);
+        }
+
+        .control-btn.secondary {
+            background: #2196f3;
+        }
+
+        .control-btn.secondary:hover {
+            background: #1976d2;
+        }
+
+        .info-card {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            text-align: center;
+        }
+
+        .info-card p {
+            margin: 5px 0;
+            color: #666;
+        }
+
+        .info-card a {
+            color: #4caf50;
+            text-decoration: none;
+        }
+
+        .info-card a:hover {
+            text-decoration: underline;
+        }
+
+        .loading-indicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: #666;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #4caf50;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error-message {
+            background: #ffebee;
+            color: #c62828;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            border-left: 4px solid #c62828;
+            text-align: center;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+            
+            .container {
+                padding: 15px;
+            }
+            
+            #viewer-container {
+                height: 400px;
+            }
+            
+            .controls {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .control-btn {
+                width: 200px;
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1><i class="fas fa-cube"></i> Visualizador 3D</h1>
+            <h2>PDB ID: {{ pdb_id }}</h2>
+        </div>
+
+        <div id="viewer-container">
+            <div class="loading-indicator" id="loadingIndicator">
+                <div class="spinner"></div>
+                <p>Cargando estructura 3D...</p>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button class="control-btn" onclick="resetView()">
+                <i class="fas fa-redo"></i> Reiniciar Vista
+            </button>
+            <button class="control-btn" onclick="toggleStyle()">
+                <i class="fas fa-palette"></i> Cambiar Estilo
+            </button>
+            <button class="control-btn secondary" onclick="openPDB()">
+                <i class="fas fa-external-link-alt"></i> Abrir en RCSB
+            </button>
+            <button class="control-btn secondary" onclick="downloadPDB()">
+                <i class="fas fa-download"></i> Descargar PDB
+            </button>
+        </div>
+
+        <div class="info-card">
+            <p><strong>Controles:</strong></p>
+            <p><strong>Rotar:</strong> Clic izquierdo + arrastrar | <strong>Zoom:</strong> Rueda del ratón | <strong>Mover:</strong> Clic derecho + arrastrar</p>
+            <p>Estructura obtenida de <a href="https://www.rcsb.org/structure/{{ pdb_id }}" target="_blank">RCSB PDB</a></p>
+        </div>
+    </div>
+
+    <script>
+        let viewer;
+        let currentStyle = 'cartoon';
+        const pdbId = '{{ pdb_id }}';
+
+        document.addEventListener("DOMContentLoaded", function() {
+            const element = document.getElementById('viewer-container');
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            
+            if (!pdbId || !element) {
+                showError("Error: No se proporcionó un PDB ID válido.");
+                return;
+            }
+
+            // Configuración del visor 3Dmol
+            const config = { 
+                backgroundColor: '0xffffff',
+                antialias: true,
+                quality: 'medium'
+            };
+            viewer = $3Dmol.createViewer(element, config);
+
+            const pdbUri = `https://files.rcsb.org/download/${pdbId}.pdb`;
+
+            // Cargar el modelo PDB
+            fetch(pdbUri)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`No se pudo cargar la estructura PDB para ${pdbId}`);
+                    }
+                    return response.text();
+                })
+                .then(data => {
+                    viewer.addModel(data, 'pdb');
+                    
+                    // Estilo inicial
+                    applyStyle('cartoon');
+                    
+                    // Centrar y hacer zoom
+                    viewer.zoomTo();
+                    viewer.render();
+                    
+                    // Ocultar indicador de carga
+                    loadingIndicator.style.display = 'none';
+                })
+                .catch(error => {
+                    console.error("Error al cargar la molécula:", error);
+                    showError(error.message);
+                });
+        });
+
+        function applyStyle(style) {
+            if (!viewer) return;
+            
+            viewer.removeAllModels();
+            
+            // Re-cargar el modelo (simplificado para demo)
+            const pdbUri = `https://files.rcsb.org/download/${pdbId}.pdb`;
+            
+            fetch(pdbUri)
+                .then(response => response.text())
+                .then(data => {
+                    viewer.addModel(data, 'pdb');
+                    
+                    switch(style) {
+                        case 'cartoon':
+                            viewer.setStyle({}, { cartoon: { color: 'spectrum' } });
+                            break;
+                        case 'stick':
+                            viewer.setStyle({}, { stick: { colorscheme: 'Jmol' } });
+                            break;
+                        case 'sphere':
+                            viewer.setStyle({}, { sphere: { colorscheme: 'Jmol' } });
+                            break;
+                        case 'line':
+                            viewer.setStyle({}, { line: { colorscheme: 'Jmol' } });
+                            break;
+                    }
+                    
+                    viewer.zoomTo();
+                    viewer.render();
+                    currentStyle = style;
+                });
+        }
+
+        function resetView() {
+            if (viewer) {
+                viewer.zoomTo();
+                viewer.render();
+            }
+        }
+
+        function toggleStyle() {
+            const styles = ['cartoon', 'stick', 'sphere', 'line'];
+            const currentIndex = styles.indexOf(currentStyle);
+            const nextStyle = styles[(currentIndex + 1) % styles.length];
+            applyStyle(nextStyle);
+        }
+
+        function openPDB() {
+            window.open(`https://www.rcsb.org/structure/${pdbId}`, '_blank');
+        }
+
+        function downloadPDB() {
+            window.open(`https://files.rcsb.org/download/${pdbId}.pdb`, '_blank');
+        }
+
+        function showError(message) {
+            const element = document.getElementById('viewer-container');
+            element.innerHTML = `
+                <div class="error-message">
+                    <i class="fas fa-exclamation-triangle" style="font-size: 2rem; margin-bottom: 10px;"></i>
+                    <p>${message}</p>
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>

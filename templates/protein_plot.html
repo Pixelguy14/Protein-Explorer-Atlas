@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dominios para {{ protein_id }}</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            background: #f8f9fa;
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 100%;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            padding: 25px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 25px;
+            color: #333;
+        }
+        
+        .header h1 {
+            color: #4caf50;
+            margin-bottom: 5px;
+            font-size: 1.8rem;
+        }
+        
+        .header h2 {
+            color: #666;
+            font-size: 1.2rem;
+            font-weight: normal;
+        }
+        
+        .plot-container {
+            margin: 20px 0;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            overflow: hidden;
+            background: white;
+        }
+        
+        .domains-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            font-size: 0.9rem;
+        }
+        
+        .domains-table th,
+        .domains-table td {
+            padding: 10px 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .domains-table th {
+            background: #4caf50;
+            color: white;
+            font-weight: bold;
+            font-size: 0.85rem;
+        }
+        
+        .domains-table tr:hover {
+            background: #f5f5f5;
+        }
+        
+        .error-message {
+            background: #ffebee;
+            color: #c62828;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            border-left: 4px solid #c62828;
+            text-align: center;
+        }
+        
+        .info-card {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+        
+        .info-card h3 {
+            margin: 0 0 15px 0;
+            color: #4caf50;
+            font-size: 1.1rem;
+        }
+        
+        .domain-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+            margin-top: 12px;
+        }
+        
+        .domain-item {
+            background: white;
+            padding: 12px;
+            border-radius: 6px;
+            border-left: 3px solid #4caf50;
+        }
+        
+        .domain-item h4 {
+            margin: 0 0 8px 0;
+            color: #4caf50;
+            font-size: 1rem;
+        }
+        
+        .domain-item p {
+            margin: 4px 0;
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin: 15px 0;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            border: 2px solid #f0f0f0;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #4caf50;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        /* Responsive adjustments for modal */
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+            
+            .container {
+                padding: 15px;
+            }
+            
+            .domain-info {
+                grid-template-columns: 1fr;
+            }
+            
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1><i class="fas fa-puzzle-piece"></i> Dominios de Proteína</h1>
+            <h2>{{ protein_id }}</h2>
+        </div>
+
+        {% if error %}
+            <div class="error-message">
+                <i class="fas fa-exclamation-triangle"></i> {{ error }}
+            </div>
+        {% elif domains %}
+            <div class="info-card">
+                <h3><i class="fas fa-info-circle"></i> Información General</h3>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-value">{{ protein_id }}</div>
+                        <div class="stat-label">UniProt ID</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value">{{ domains|length }}</div>
+                        <div class="stat-label">Dominios</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value">{{ domains|sum(attribute='end') - domains|sum(attribute='start') + domains|length }}</div>
+                        <div class="stat-label">Residuos cubiertos</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="plot-container">
+                <div id="plot"></div>
+            </div>
+
+            <div class="info-card">
+                <h3><i class="fas fa-table"></i> Detalles de Dominios</h3>
+                <div class="domain-info">
+                    {% for domain in domains %}
+                    <div class="domain-item">
+                        <h4>{{ domain.pfam_id }}</h4>
+                        <p><strong>Posición:</strong> {{ domain.start }} - {{ domain.end }}</p>
+                        <p><strong>Longitud:</strong> {{ domain.end - domain.start + 1 }} aa</p>
+                        <p><strong>E-value:</strong> {{ "%.2e"|format(domain.eval) }}</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <table class="domains-table">
+                <thead>
+                    <tr>
+                        <th>Dominio Pfam</th>
+                        <th>Inicio</th>
+                        <th>Fin</th>
+                        <th>Longitud</th>
+                        <th>E-value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for domain in domains %}
+                    <tr>
+                        <td><strong>{{ domain.pfam_id }}</strong></td>
+                        <td>{{ domain.start }}</td>
+                        <td>{{ domain.end }}</td>
+                        <td>{{ domain.end - domain.start + 1 }} aa</td>
+                        <td>{{ "%.2e"|format(domain.eval) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <div class="error-message">
+                <i class="fas fa-search"></i> No se encontraron dominios para esta proteína.
+            </div>
+        {% endif %}
+    </div>
+
+    {% if domains %}
+    <script>
+    // Datos de dominios pasados desde Flask
+    var domains = {{ domains|tojson }};
+    
+    // Verificar que tenemos datos válidos
+    if (domains && domains.length > 0) {
+        // Crear gráfico de barras horizontales para dominios
+        var data = [{
+            type: 'bar',
+            y: domains.map(function(d) { return d.pfam_id; }),
+            x: domains.map(function(d) { return d.end - d.start + 1; }),
+            orientation: 'h',
+            text: domains.map(function(d) { return d.start + '-' + d.end; }),
+            textposition: 'inside',
+            marker: {
+                color: domains.map(function(d, i) { return 'hsl(' + ((i * 60) % 360) + ', 70%, 50%)'; }),
+                line: {
+                    color: 'white',
+                    width: 2
+                }
+            },
+            hovertemplate: '<b>%{y}</b><br>' +
+                          'Posición: %{text}<br>' +
+                          'Longitud: %{x} aa<br>' +
+                          '<extra></extra>'
+        }];
+
+        var layout = {
+            title: {
+                text: 'Distribución de Dominios por Longitud',
+                font: { size: 16, color: '#333' }
+            },
+            xaxis: {
+                title: 'Longitud del Dominio (aminoácidos)',
+                gridcolor: '#f0f0f0'
+            },
+            yaxis: {
+                title: 'Dominio Pfam',
+                gridcolor: '#f0f0f0'
+            },
+            plot_bgcolor: '#fafafa',
+            paper_bgcolor: 'white',
+            margin: { l: 80, r: 30, t: 60, b: 60 },
+            height: Math.max(300, domains.length * 50)
+        };
+
+        var config = {
+            responsive: true,
+            displayModeBar: true,
+            modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d', 'autoScale2d'],
+            displaylogo: false
+        };
+
+        Plotly.newPlot('plot', data, layout, config);
+
+        // Crear segundo gráfico - timeline de dominios
+        var timelineData = [{
+            type: 'scatter',
+            mode: 'markers+text',
+            x: domains.map(function(d) { return (d.start + d.end) / 2; }),
+            y: domains.map(function(d, i) { return i; }),
+            text: domains.map(function(d) { return d.pfam_id; }),
+            textposition: 'middle center',
+            marker: {
+                size: domains.map(function(d) { return Math.sqrt(d.end - d.start + 1) * 2; }),
+                color: domains.map(function(d, i) { return 'hsl(' + ((i * 60) % 360) + ', 70%, 50%)'; }),
+                line: { color: 'white', width: 2 }
+            },
+            hovertemplate: '<b>%{text}</b><br>' +
+                          'Centro: %{x}<br>' +
+                          '<extra></extra>'
+        }];
+
+        // Agregar líneas para mostrar extensión de dominios
+        domains.forEach(function(domain, i) {
+            timelineData.push({
+                type: 'scatter',
+                mode: 'lines',
+                x: [domain.start, domain.end],
+                y: [i, i],
+                line: {
+                    color: 'hsl(' + ((i * 60) % 360) + ', 70%, 50%)',
+                    width: 6
+                },
+                showlegend: false,
+                hoverinfo: 'skip'
+            });
+        });
+
+        var timelineLayout = {
+            title: {
+                text: 'Timeline de Dominios en la Secuencia',
+                font: { size: 16, color: '#333' }
+            },
+            xaxis: {
+                title: 'Posición en la Secuencia',
+                gridcolor: '#f0f0f0'
+            },
+            yaxis: {
+                title: 'Dominios',
+                tickmode: 'array',
+                tickvals: domains.map(function(d, i) { return i; }),
+                ticktext: domains.map(function(d) { return d.pfam_id; }),
+                gridcolor: '#f0f0f0'
+            },
+            plot_bgcolor: '#fafafa',
+            paper_bgcolor: 'white',
+            margin: { l: 80, r: 30, t: 60, b: 60 },
+            height: Math.max(300, domains.length * 50)
+        };
+
+        // Crear contenedor para segundo gráfico
+        var timelineContainer = document.createElement('div');
+        timelineContainer.id = 'timeline-plot';
+        timelineContainer.style.marginTop = '20px';
+        document.querySelector('.plot-container').appendChild(timelineContainer);
+
+        Plotly.newPlot('timeline-plot', timelineData, timelineLayout, config);
+    } else {
+        // Mostrar mensaje cuando no hay datos
+        document.getElementById('plot').innerHTML = '<div style="text-align: center; padding: 50px; color: #666;"><i class="fas fa-exclamation-circle" style="font-size: 2rem; margin-bottom: 15px;"></i><br><h3>No hay datos de dominios para mostrar</h3></div>';
+    }
+    </script>
+    {% else %}
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        var plot = document.getElementById('plot');
+        if (plot) {
+            plot.innerHTML = '<div style="text-align: center; padding: 50px; color: #666;"><i class="fas fa-search" style="font-size: 2rem; margin-bottom: 15px;"></i><br><h3>No se encontraron dominios</h3><p>Intenta con otra proteína.</p></div>';
+        }
+    });
+    </script>
+    {% endif %}
+</body>
+</html>
