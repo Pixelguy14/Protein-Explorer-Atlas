@@ -1,12 +1,928 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Protein Explorer Atlas</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <title>Clasificador de Familias de Proteínas</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* Header */
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            color: white;
+        }
+
+        .header-content h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .header-icon {
+            font-size: 3rem;
+            margin-bottom: 20px;
+            color: #4caf50;
+        }
+
+        .header-content p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        /* Cards */
+        .upload-card,
+        .results-card,
+        .info-card,
+        .metrics-card,
+        .performance-card,
+        .visualization-card,
+        .loading-card {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease;
+        }
+
+        .upload-card:hover,
+        .results-card:hover,
+        .info-card:hover,
+        .metrics-card:hover,
+        .performance-card:hover,
+        .visualization-card:hover {
+            transform: translateY(-5px);
+        }
+
+        /* Upload Section */
+        .file-input-container {
+            position: relative;
+            margin-bottom: 30px;
+        }
+
+        .file-input-label {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 200px;
+            border: 3px dashed #4caf50;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: #f8f9fa;
+        }
+
+        .file-input-label:hover {
+            border-color: #45a049;
+            background: #e8f5e8;
+        }
+
+        .file-input-label i {
+            font-size: 3rem;
+            color: #4caf50;
+            margin-bottom: 15px;
+        }
+
+        .file-input-label span {
+            font-size: 1.1rem;
+            color: #666;
+        }
+
+        #proteinFile {
+            position: absolute;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+
+        .process-btn {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(45deg, #4caf50, #45a049);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.2rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .process-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(76, 175, 80, 0.4);
+        }
+
+        .process-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Loading */
+        .loading-card {
+            text-align: center;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #4caf50;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Info Grid */
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .info-label {
+            font-weight: bold;
+            color: #666;
+        }
+
+        .info-value {
+            color: #4caf50;
+            font-weight: bold;
+        }
+
+        /* Table */
+        .table-container {
+            overflow-x: auto;
+            margin-top: 20px;
+        }
+
+        .results-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+        }
+
+        .results-table th,
+        .results-table td {
+            padding: 15px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .results-table th {
+            background: #4caf50;
+            color: white;
+            font-weight: bold;
+        }
+
+        .results-table tr:hover {
+            background: #f5f5f5;
+        }
+
+        .confidence-bar {
+            width: 100px;
+            height: 20px;
+            background: #e0e0e0;
+            border-radius: 10px;
+            overflow: hidden;
+            position: relative;
+            margin-bottom: 5px;
+        }
+
+        .confidence-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ff4444, #ffaa00, #4caf50);
+            border-radius: 10px;
+            transition: width 0.5s ease;
+        }
+
+        .view-btn {
+            padding: 8px 15px;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+            margin: 2px;
+        }
+
+        .view-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+
+        .btn-primary { background: #2196f3; }
+        .btn-primary:hover { background: #1976d2; }
+        .btn-secondary { background: #ff5722; }
+        .btn-secondary:hover { background: #e64a19; }
+        .btn-tertiary { background: #9c27b0; }
+        .btn-tertiary:hover { background: #7b1fa2; }
+
+        /* Metrics */
+        .metrics-section {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 30px;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 25px;
+            margin-top: 20px;
+        }
+
+        .metric-item {
+            text-align: center;
+        }
+
+        .metric-value {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #4caf50;
+            margin-bottom: 10px;
+        }
+
+        .metric-label {
+            font-size: 1rem;
+            color: #666;
+            margin-bottom: 15px;
+        }
+
+        .metric-bar {
+            width: 100%;
+            height: 8px;
+            background: #e0e0e0;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .metric-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4caf50, #45a049);
+            border-radius: 4px;
+            transition: width 0.8s ease;
+            width: 0%;
+        }
+
+        /* Performance */
+        .performance-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 15px 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .performance-item:last-child {
+            border-bottom: none;
+        }
+
+        .performance-item i {
+            color: #4caf50;
+            width: 20px;
+        }
+
+        .performance-value {
+            margin-left: auto;
+            font-weight: bold;
+        }
+
+        .status-active {
+            color: #4caf50;
+        }
+
+        /* Visualization */
+        .visualization-container {
+            margin-top: 20px;
+        }
+
+        .mol-viewer {
+            height: 400px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border: 2px dashed #ddd;
+        }
+
+        .view-3d-btn {
+            padding: 12px 25px;
+            background: #ff5722;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            margin-top: 20px;
+            transition: background 0.3s ease;
+        }
+
+        .view-3d-btn:hover {
+            background: #e64a19;
+        }
+
+        /* Modal Styles */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.7);
+            animation: fadeIn 0.3s ease;
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            margin: 2% auto;
+            padding: 0;
+            border: none;
+            border-radius: 15px;
+            width: 95%;
+            max-width: 1400px;
+            height: 90vh;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            animation: slideIn 0.4s ease;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 25px;
+            border-bottom: 2px solid #f0f0f0;
+            background: linear-gradient(135deg, #4caf50, #45a049);
+            color: white;
+            border-radius: 15px 15px 0 0;
+        }
+
+        .modal-header h2 {
+            margin: 0;
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .modal-close-btn {
+            color: white;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            padding: 5px 10px;
+            border-radius: 50%;
+            transition: all 0.3s ease;
+        }
+
+        .modal-close-btn:hover {
+            background: rgba(255,255,255,0.2);
+            transform: rotate(90deg);
+        }
+
+        .modal-body {
+            flex: 1;
+            padding: 0;
+            overflow: hidden;
+        }
+
+        .modal-iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            border-radius: 0 0 15px 15px;
+        }
+
+        .modal-loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+            flex-direction: column;
+            color: #666;
+        }
+
+        .modal-loading .spinner {
+            margin-bottom: 20px;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .metrics-section {
+                grid-template-columns: 1fr;
+            }
+
+            .metrics-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .header-content h1 {
+                font-size: 2rem;
+            }
+
+            .container {
+                padding: 10px;
+            }
+
+            .modal-content {
+                width: 98%;
+                height: 95vh;
+                margin: 1% auto;
+            }
+
+            .modal-header {
+                padding: 15px 20px;
+            }
+
+            .modal-header h2 {
+                font-size: 1.2rem;
+            }
+        }
+
+        /* Animations */
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes slideIn {
+            from { transform: translateY(-50px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .results-section {
+            animation: fadeIn 0.5s ease;
+        }
+
+        .upload-section h2,
+        .results-card h3,
+        .info-card h3,
+        .metrics-card h3,
+        .performance-card h3,
+        .visualization-card h3 {
+            color: #333;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .upload-section h2 i,
+        .results-card h3 i,
+        .info-card h3 i,
+        .metrics-card h3 i,
+        .performance-card h3 i,
+        .visualization-card h3 i {
+            color: #4caf50;
+        }
+    </style>
 </head>
 <body>
-    <h1>Welcome to the Protein Explorer Atlas</h1>
+    <div class="container">
+         Header 
+        <header class="header">
+            <div class="header-content">
+                <i class="fas fa-dna header-icon"></i>
+                <h1>Clasificador de Familias de Proteínas</h1>
+                <p>Análisis avanzado de secuencias proteicas usando Machine Learning</p>
+            </div>
+        </header>
+
+         Upload Section 
+        <section class="upload-section">
+            <div class="upload-card">
+                <h2><i class="fas fa-upload"></i> Cargar Archivo de Proteína</h2>
+                <form id="proteinForm" enctype="multipart/form-data">
+                    <div class="file-input-container">
+                        <input type="file" id="proteinFile" name="protein_file" accept=".fasta,.fa,.pdb,.txt" required>
+                        <label for="proteinFile" class="file-input-label">
+                            <i class="fas fa-cloud-upload-alt"></i>
+                            <span>Seleccionar archivo (.fasta, .fa, .pdb, .txt)</span>
+                        </label>
+                    </div>
+                    <button type="submit" class="process-btn" id="processBtn">
+                        <i class="fas fa-cogs"></i>
+                        Procesar Proteína
+                    </button>
+                </form>
+            </div>
+        </section>
+
+         Loading Section 
+        <section class="loading-section" id="loadingSection" style="display: none;">
+            <div class="loading-card">
+                <div class="spinner"></div>
+                <p>Analizando secuencia proteica...</p>
+            </div>
+        </section>
+
+         Results Section 
+        <section class="results-section" id="resultsSection" style="display: none;">
+             Sequence Info 
+            <div class="info-card">
+                <h3><i class="fas fa-info-circle"></i> Información de la Secuencia</h3>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <span class="info-label">Longitud:</span>
+                        <span class="info-value" id="sequenceLength">-</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Procesado:</span>
+                        <span class="info-value" id="processTime">-</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Protein ID:</span>
+                        <span class="info-value" id="proteinId">-</span>
+                    </div>
+                </div>
+            </div>
+
+             Similar Proteins Table 
+            <div class="results-card">
+                <h3><i class="fas fa-table"></i> Familias de Proteínas Similares</h3>
+                <div class="table-container">
+                    <table class="results-table" id="familiesTable">
+                        <thead>
+                            <tr>
+                                <th>Familia</th>
+                                <th>Confianza</th>
+                                <th>PDB ID</th>
+                                <th>Descripción</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+             Metrics Section 
+            <div class="metrics-section">
+                <div class="metrics-card">
+                    <h3><i class="fas fa-chart-bar"></i> Métricas de Precisión</h3>
+                    <div class="metrics-grid">
+                        <div class="metric-item">
+                            <div class="metric-value" id="accuracyValue">-</div>
+                            <div class="metric-label">Precisión</div>
+                            <div class="metric-bar">
+                                <div class="metric-fill" id="accuracyBar"></div>
+                            </div>
+                        </div>
+                        <div class="metric-item">
+                            <div class="metric-value" id="precisionValue">-</div>
+                            <div class="metric-label">Precision</div>
+                            <div class="metric-bar">
+                                <div class="metric-fill" id="precisionBar"></div>
+                            </div>
+                        </div>
+                        <div class="metric-item">
+                            <div class="metric-value" id="recallValue">-</div>
+                            <div class="metric-label">Recall</div>
+                            <div class="metric-bar">
+                                <div class="metric-fill" id="recallBar"></div>
+                            </div>
+                        </div>
+                        <div class="metric-item">
+                            <div class="metric-value" id="f1Value">-</div>
+                            <div class="metric-label">F1-Score</div>
+                            <div class="metric-bar">
+                                <div class="metric-fill" id="f1Bar"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                 Performance Card 
+                <div class="performance-card">
+                    <h3><i class="fas fa-tachometer-alt"></i> Rendimiento</h3>
+                    <div class="performance-item">
+                        <i class="fas fa-clock"></i>
+                        <span>Tiempo de procesamiento:</span>
+                        <span class="performance-value" id="processingTime">-</span>
+                    </div>
+                    <div class="performance-item">
+                        <i class="fas fa-server"></i>
+                        <span>Estado del modelo:</span>
+                        <span class="performance-value status-active">Activo</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+     The Modal 
+    <div id="infoModal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle"><i class="fas fa-chart-bar"></i> Visualización</h2>
+                <span class="modal-close-btn">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="modal-loading" id="modalLoading">
+                    <div class="spinner"></div>
+                    <p>Cargando visualización...</p>
+                </div>
+                <iframe id="modalIframe" class="modal-iframe" src="about:blank" style="display: none;"></iframe>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentProteinId = null;
+
+        document.addEventListener("DOMContentLoaded", () => {
+            const form = document.getElementById("proteinForm");
+            const fileInput = document.getElementById("proteinFile");
+            const processBtn = document.getElementById("processBtn");
+            const loadingSection = document.getElementById("loadingSection");
+            const resultsSection = document.getElementById("resultsSection");
+
+            // Modal elements
+            const modal = document.getElementById("infoModal");
+            const modalTitle = document.getElementById("modalTitle");
+            const modalIframe = document.getElementById("modalIframe");
+            const modalLoading = document.getElementById("modalLoading");
+            const closeBtn = document.querySelector(".modal-close-btn");
+
+            // Handle file selection
+            fileInput.addEventListener("change", (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const label = document.querySelector(".file-input-label span");
+                    label.textContent = `Archivo seleccionado: ${file.name}`;
+                    label.style.color = "#4CAF50";
+                }
+            });
+
+            // Handle form submission
+            form.addEventListener("submit", async (e) => {
+                e.preventDefault();
+
+                const formData = new FormData();
+                const file = fileInput.files[0];
+
+                if (!file) {
+                    alert("Por favor selecciona un archivo");
+                    return;
+                }
+
+                formData.append("protein_file", file);
+
+                // Show loading
+                loadingSection.style.display = "block";
+                resultsSection.style.display = "none";
+                processBtn.disabled = true;
+                processBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Procesando...';
+
+                try {
+                    const response = await fetch("/predict", {
+                        method: "POST",
+                        body: formData,
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        currentProteinId = data.protein_id || data.proteinId;
+                        displayResults(data);
+                    } else {
+                        throw new Error(data.error || "Error desconocido");
+                    }
+                } catch (error) {
+                    alert(`Error: ${error.message}`);
+                } finally {
+                    loadingSection.style.display = "none";
+                    processBtn.disabled = false;
+                    processBtn.innerHTML = '<i class="fas fa-cogs"></i> Procesar Proteína';
+                }
+            });
+
+            function displayResults(data) {
+                // Show results section
+                resultsSection.style.display = "block";
+
+                // Update sequence info
+                document.getElementById("sequenceLength").textContent = `${data.sequence_length} aminoácidos`;
+                document.getElementById("processTime").textContent = new Date(data.timestamp).toLocaleString();
+                document.getElementById("proteinId").textContent = currentProteinId || "N/A";
+
+                // Populate families table
+                const tableBody = document.querySelector("#familiesTable tbody");
+                tableBody.innerHTML = "";
+
+                data.families.forEach((family) => {
+                    const row = document.createElement("tr");
+                    row.innerHTML = `
+                        <td><strong>${family.family}</strong></td>
+                        <td>
+                            <div class="confidence-bar">
+                                <div class="confidence-fill" style="width: ${family.confidence * 100}%"></div>
+                            </div>
+                            <small>${(family.confidence * 100).toFixed(1)}%</small>
+                        </td>
+                        <td><code>${family.pdb_id}</code></td>
+                        <td>${family.description}</td>
+                        <td>
+                            <button class="view-btn btn-primary" onclick="viewPDB('${family.pdb_id}')">
+                                <i class="fas fa-eye"></i> PDB
+                            </button>
+                            <button class="view-btn btn-secondary" onclick="viewDomains('${currentProteinId}')">
+                                <i class="fas fa-puzzle-piece"></i> Dominios
+                            </button>
+                            <button class="view-btn btn-tertiary" onclick="view3D('${family.pdb_id}')">
+                                <i class="fas fa-cube"></i> 3D
+                            </button>
+                        </td>
+                    `;
+                    tableBody.appendChild(row);
+                });
+
+                // Update metrics
+                updateMetrics(data.metrics);
+
+                // Update performance
+                document.getElementById("processingTime").textContent = `${data.metrics.processing_time}s`;
+            }
+
+            function updateMetrics(metrics) {
+                const metricTypes = ["accuracy", "precision", "recall", "f1_score"];
+
+                metricTypes.forEach((type) => {
+                    const value = metrics[type];
+                    const valueElement = document.getElementById(`${type === "f1_score" ? "f1" : type}Value`);
+                    const barElement = document.getElementById(`${type === "f1_score" ? "f1" : type}Bar`);
+
+                    if (valueElement && barElement) {
+                        valueElement.textContent = (value * 100).toFixed(1) + "%";
+
+                        setTimeout(() => {
+                            barElement.style.width = value * 100 + "%";
+                        }, 100);
+                    }
+                });
+            }
+
+            // Modal functions
+            function openModal(title, url) {
+                modalTitle.innerHTML = title;
+                modal.style.display = "block";
+                modalLoading.style.display = "flex";
+                modalIframe.style.display = "none";
+                
+                modalIframe.src = url;
+                
+                modalIframe.onload = function() {
+                    modalLoading.style.display = "none";
+                    modalIframe.style.display = "block";
+                };
+
+                // Timeout para mostrar error si tarda mucho
+                setTimeout(() => {
+                    if (modalLoading.style.display !== "none") {
+                        modalLoading.innerHTML = '<i class="fas fa-exclamation-triangle" style="font-size: 2rem; color: #ff5722; margin-bottom: 10px;"></i><p>Error al cargar la visualización</p>';
+                    }
+                }, 10000);
+            }
+
+            function closeModal() {
+                modal.style.display = "none";
+                modalIframe.src = "about:blank";
+            }
+
+            // Global functions for buttons
+            window.viewPDB = function(pdbId) {
+                window.open(`https://www.rcsb.org/structure/${pdbId}`, '_blank');
+            };
+
+            window.viewDomains = function(proteinId) {
+                if (!proteinId || proteinId === 'undefined') {
+                    alert('No se pudo obtener el ID de la proteína');
+                    return;
+                }
+                openModal(
+                    '<i class="fas fa-puzzle-piece"></i> Dominios de Proteína', 
+                    `/plot/${proteinId}`
+                );
+            };
+
+            window.view3D = function(pdbId) {
+                if (!pdbId || pdbId === 'undefined') {
+                    alert('No se pudo obtener el PDB ID');
+                    return;
+                }
+                openModal(
+                    '<i class="fas fa-cube"></i> Estructura 3D', 
+                    `/view3d/${pdbId}`
+                );
+            };
+
+            // Close modal events
+            closeBtn.addEventListener("click", closeModal);
+            
+            modal.addEventListener("click", (e) => {
+                if (e.target === modal) {
+                    closeModal();
+                }
+            });
+
+            document.addEventListener("keydown", (e) => {
+                if (e.key === "Escape" && modal.style.display === "block") {
+                    closeModal();
+                }
+            });
+
+            // Drag and drop functionality
+            const fileLabel = document.querySelector(".file-input-label");
+            ["dragenter", "dragover", "dragleave", "drop"].forEach((eventName) => {
+                fileLabel.addEventListener(eventName, preventDefaults, false);
+            });
+
+            function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+
+            ["dragenter", "dragover"].forEach((eventName) => {
+                fileLabel.addEventListener(eventName, highlight, false);
+            });
+
+            ["dragleave", "drop"].forEach((eventName) => {
+                fileLabel.addEventListener(eventName, unhighlight, false);
+            });
+
+            function highlight(e) {
+                fileLabel.style.borderColor = "#45a049";
+                fileLabel.style.background = "#e8f5e8";
+            }
+
+            function unhighlight(e) {
+                fileLabel.style.borderColor = "#4CAF50";
+                fileLabel.style.background = "#f8f9fa";
+            }
+
+            fileLabel.addEventListener("drop", handleDrop, false);
+
+            function handleDrop(e) {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+
+                if (files.length > 0) {
+                    document.getElementById("proteinFile").files = files;
+                    const event = new Event("change", { bubbles: true });
+                    document.getElementById("proteinFile").dispatchEvent(event);
+                }
+            }
+        });
+    </script>
 </body>
 </html>
