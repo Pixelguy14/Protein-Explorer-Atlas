@@ -1,7 +1,8 @@
-import pandas as pd # type: ignore
-from transformers import AutoTokenizer, EsmModel #type: ignore
-import torch # type: ignore
+import pandas as pd
+from transformers import AutoTokenizer, EsmModel
+import torch
 import numpy as np
+from tqdm import tqdm # Import tqdm
 
 # --- Part 1: Data Cleaning and Filtering ---
 
@@ -72,41 +73,61 @@ try:
     tokenizer = AutoTokenizer.from_pretrained("facebook/esm2_t12_35M_UR50D")
     model = EsmModel.from_pretrained("facebook/esm2_t12_35M_UR50D")
     # Move model to GPU if available
-    if torch.cuda.is_available():
-        model = model.to('cuda')
-        print("ESM-2 model moved to GPU.")
-    else:
-        print("ESM-2 model running on CPU. Consider using a GPU for faster processing.")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model.to(device)
+    print(f"ESM-2 model running on {device}.")
 except Exception as e:
     print(f"Error loading ESM-2 model or tokenizer: {e}")
     print("Please ensure 'transformers' and 'torch' are correctly installed and configured.")
     exit()
 
-def get_esm_embedding(sequence):
-    if pd.isna(sequence):
-        return np.nan # Return NaN for missing sequences
+def get_esm_embeddings_batch(sequences, model, tokenizer, device, max_length=1024):
+    # Filter out NaN sequences and store their original indices
+    valid_sequences = [s for s in sequences if pd.notna(s)]
+    
+    if not valid_sequences:
+        # If all sequences are NaN, return an array of NaNs with correct shape
+        return np.full((len(sequences), model.config.hidden_size), np.nan, dtype=np.float32)
+
+    # Tokenize and move to device
+    inputs = tokenizer(valid_sequences, return_tensors="pt", padding=True, truncation=True, max_length=max_length)
+    inputs = {k: v.to(device) for k, v in inputs.items()}
+
+    with torch.no_grad():
+        outputs = model(**inputs)
+
+    # Get embeddings for [CLS] token
+    batch_embeddings = outputs.last_hidden_state[:, 0].cpu().numpy()
+
+    # Reconstruct full embeddings array with NaNs for original NaN positions
+    full_embeddings = np.full((len(sequences), model.config.hidden_size), np.nan, dtype=np.float32)
+    valid_idx_counter = 0
+    for i, seq in enumerate(sequences):
+        if pd.notna(seq):
+            full_embeddings[i] = batch_embeddings[valid_idx_counter]
+            valid_idx_counter += 1
+    return full_embeddings
+
+# Generate embeddings in batches
+print("Generating ESM-2 embeddings for sequences in batches...")
+all_embeddings = []
+batch_size = 32 # You can adjust this batch size based on your GPU memory
+
+# Iterate through the DataFrame in chunks/batches
+for i in tqdm(range(0, len(df_merged), batch_size), desc="Generating Embeddings"):
+    batch_sequences = df_merged['Sequence'].iloc[i:i+batch_size].tolist()
+    
     try:
-        # Ensure sequence is a string
-        sequence = str(sequence)
-        inputs = tokenizer(sequence, return_tensors="pt", padding=True, truncation=True, max_length=1024)
-        # Move inputs to GPU if model is on GPU
-        if torch.cuda.is_available():
-            inputs = {k: v.to('cuda') for k, v in inputs.items()}
-
-        with torch.no_grad():
-            outputs = model(**inputs)
-        # Return the embedding of the [CLS] token (first token)
-        # Detach from GPU and convert to numpy
-        return outputs.last_hidden_state[:,0].cpu().numpy().flatten()
+        batch_embeddings_array = get_esm_embeddings_batch(batch_sequences, model, tokenizer, device)
+        all_embeddings.extend(batch_embeddings_array)
     except Exception as e:
-        print(f"Error generating embedding for sequence: {sequence[:50]}... Error: {e}")
-        return np.nan # Return NaN if embedding generation fails
+        print(f"Error processing batch starting at index {i}: {e}")
+        # If an error occurs in a batch, append NaNs for all sequences in that batch
+        for _ in range(len(batch_sequences)):
+            all_embeddings.append(np.full(model.config.hidden_size, np.nan, dtype=np.float32))
 
-# Apply the embedding function
-# It's recommended to process in batches for very large datasets,
-# but for simplicity, we'll apply directly.
-print("Generating ESM-2 embeddings for sequences...")
-df_merged["ESM2_Embedding"] = df_merged["Sequence"].apply(get_esm_embedding)
+# Assign the collected embeddings to the DataFrame
+df_merged["ESM2_Embedding"] = all_embeddings
 
 print("\n--- ESM-2 Embedding Generation Complete ---")
 print("First 5 rows with ESM2_Embedding:")
