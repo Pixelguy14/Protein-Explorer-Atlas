@@ -5,3 +5,7 @@ transformers
 torch
 numpy
 scikit-learn
+torchvision
+matplotlib
+seaborn
+tqdm
