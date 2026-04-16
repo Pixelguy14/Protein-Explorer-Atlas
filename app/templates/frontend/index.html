@@ -1,0 +1,155 @@
+{% extends 'layouts/base.html' %}
+
+{% block title %}Analyze - {{ app_name }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+{% endblock %}
+
+{% block content %}
+<!-- Upload Section -->
+<section class="upload-section">
+    <div class="upload-card">
+        <h2 class="mb-4"><i class="fas fa-microscope"></i> Protein Sequence Analysis</h2>
+        <form id="proteinForm" enctype="multipart/form-data">
+            <div class="grid-2">
+                <!-- Option 1: File Upload -->
+                <div class="file-input-container">
+                    <input type="file" id="proteinFile" name="protein_file" accept=".fasta,.fa,.pdb,.txt">
+                    <label for="proteinFile" class="file-input-label">
+                        <i class="fas fa-cloud-upload-alt" style="font-size: 2.5rem; color: var(--primary); margin-bottom: 1rem;"></i>
+                        <span>Upload FASTA file</span>
+                        <small style="color: var(--text-muted);">.fasta, .fa, .pdb, .txt</small>
+                    </label>
+                </div>
+
+                <!-- Option 2: Paste Sequence -->
+                <div>
+                    <textarea id="pasteSequence" class="textarea-field" style="height: 180px;"
+                        placeholder="Paste FASTA or raw amino acid sequence here...&#10;&#10;Example:&#10;>sp|P01308|INS_HUMAN Insulin&#10;MALWMRLLPLLALLALWGPDPAAAFVNQHLCGSHLVEALYLVCGERGFFYTPKT"></textarea>
+                </div>
+            </div>
+
+            <button type="submit" class="process-btn mt-4" id="processBtn" style="width: 100%;">
+                <i class="fas fa-bolt"></i>
+                Run Zero-Shot Inference
+            </button>
+        </form>
+
+        <div class="text-center mt-4">
+            <small style="color: var(--text-muted);">
+                <i class="fas fa-external-link-alt"></i>
+                Sample FASTAs from <a href="https://www.uniprot.org/uniprotkb?query=reviewed%3Atrue+AND+organism_id%3A9606&sort=score" target="_blank" style="color: var(--secondary);">UniProt</a>
+                or <a href="https://www.rcsb.org" target="_blank" style="color: var(--secondary);">RCSB PDB</a>
+            </small>
+        </div>
+    </div>
+</section>
+
+<!-- Loading Section -->
+<section class="loading-section" id="loadingSection" style="display: none;">
+    <div class="loading-card">
+        <div class="loading-indicator">
+            <div class="spinner"></div>
+            <p style="font-family: var(--font-heading);">Running ESM-2 zero-shot inference...</p>
+        </div>
+    </div>
+</section>
+
+<!-- Results Section -->
+<section class="results-section" id="resultsSection" style="display: none;">
+
+    <!-- Sequence Identity + Structure Actions -->
+    <div class="info-card">
+        <h3 class="mb-4"><i class="fas fa-fingerprint"></i> Sequence Identity</h3>
+        <div class="grid-2">
+            <div class="info-grid">
+                <div class="info-item">
+                    <span class="info-label">Residues</span>
+                    <span class="info-value" id="sequenceLength">-</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Protein ID</span>
+                    <span class="info-value" id="proteinId" style="font-family: var(--font-heading);">-</span>
+                </div>
+            </div>
+            <div id="structureActions" style="display: flex; align-items: center; justify-content: center;">
+                <p style="color: var(--text-muted);">Structure lookup pending...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Naturalness + Performance -->
+    <div class="grid-2">
+        <div class="metrics-card">
+            <h3 class="mb-4"><i class="fas fa-heartbeat"></i> Sequence Naturalness</h3>
+            <div class="metric-card-inner">
+                <div class="metric-value" id="naturalnessValue">-</div>
+                <div class="metric-label">Pseudo-Perplexity Score</div>
+                <div class="progress-container">
+                    <div class="progress-bar" id="naturalnessBar" style="width: 0%; background: var(--success);"></div>
+                </div>
+                <small style="color: var(--text-muted); display: block; margin-top: 8px;">Higher = more similar to natural proteins in ESM-2's training corpus</small>
+            </div>
+        </div>
+
+        <div class="performance-card">
+            <h3 class="mb-4"><i class="fas fa-microchip"></i> Inference Engine</h3>
+            <div class="performance-item">
+                <i class="fas fa-stopwatch"></i>
+                <span>Latency:</span>
+                <span class="performance-value" id="processingTime">-</span>
+            </div>
+            <div class="performance-item">
+                <i class="fas fa-layer-group"></i>
+                <span>Architecture:</span>
+                <span class="performance-value">ESM-2 35M (MLM Head)</span>
+            </div>
+            <div class="performance-item">
+                <i class="fas fa-robot"></i>
+                <span>Mode:</span>
+                <span class="performance-value" style="color: var(--success);">Zero-Shot</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Conservation Profile (always shown) -->
+    <div class="results-card" style="border-left: 4px solid #7c3aed;">
+        <h3 class="mb-4"><i class="fas fa-shield-alt"></i> Conservation Profile</h3>
+        <p style="color: var(--text-muted); margin-bottom: 1rem;">
+            Per-residue Shannon Entropy over the 20-amino acid vocabulary (H = −Σ p·log₂p).
+            <strong style="color: #fbbf24;">Yellow</strong> = conserved (low entropy), <strong style="color: #1e3a5f;">Dark</strong> = variable (high entropy).
+        </p>
+        <div id="entropyContainer" class="plot-container" style="min-height: 240px;"></div>
+    </div>
+
+    <!-- Interactive Mutation Lab -->
+    <div class="interactive-lab-card" style="border-left: 4px solid var(--accent);">
+        <h3 class="mb-4"><i class="fas fa-flask-vial"></i> In-Silico Mutagenesis Lab</h3>
+        <p style="color: var(--text-muted); margin-bottom: 1rem;">
+            Edit the sequence below. The engine will compute a <strong>Masked Marginal Log-Likelihood Ratio</strong> for each mutated position:
+            LLR = log P(mutant) − log P(wild-type). Negative = destabilizing.
+        </p>
+
+        <textarea id="labSequence" class="textarea-field mb-4" style="height: 120px; word-break: break-all;"
+            placeholder="Original sequence will load here after analysis..."></textarea>
+
+        <button id="analyzeMutationBtn" class="process-btn btn-accent" style="width: auto;">
+            <i class="fas fa-dna"></i> Compute Variant Effect
+        </button>
+
+        <div id="hotspotsSummary" class="mt-4" style="display: none; padding: 15px; border-radius: 8px; border: 1px solid var(--border);"></div>
+
+        <!-- Delta LLR Heatmap (only after mutation) -->
+        <div id="deltaContainer" class="mt-4" style="display: none;">
+            <h4 style="margin-bottom: 8px; color: var(--primary);"><i class="fas fa-chart-bar"></i> Variant Effect Map</h4>
+            <div id="deltaPlot" class="plot-container" style="min-height: 240px;"></div>
+        </div>
+    </div>
+
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/script.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+    <meta name="description" content="Protein Explorer Atlas - Deep Learning Protein Analysis Platform">
+    <title>{% block title %}{{ app_name }}{% endblock %}</title>
+
+    <!-- External Libs -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+
+    <!-- Global Style -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    {% block extra_css %}{% endblock %}
+</head>
+
+<body>
+    {% include 'includes/_navbar.html' %}
+
+    <main class="container" style="padding-top: 100px; min-height: calc(100vh - 100px);">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer style="padding: 2rem; text-align: center; color: var(--text-muted); font-size: var(--text-xs);">
+        <p>&copy; 2026 {{ app_name }} | ESM-2 Neural Engine</p>
+    </footer>
+
+    <!-- Responsive Modal System -->
+    <div id="infoModal" class="modal-overlay"
+        style="display:none; position:fixed; z-index:2000; left:0; top:0; width:100%; height:100%; background:rgba(15, 23, 42, 0.8); display: none; align-items: center; justify-content: center;">
+        <div class="modal-content"
+            style="background:#fff; width:95%; max-width:1400px; height:90vh; border-radius:12px; display:flex; flex-direction:column; position: relative;">
+            <div class="modal-header"
+                style="display:flex; justify-content:space-between; align-items: center; padding: 1rem 1.5rem; background: var(--primary); color:white; border-radius:12px 12px 0 0;">
+                <h2 id="modalTitle" style="font-size: var(--text-lg); margin: 0;"><i class="fas fa-chart-bar"></i>
+                    Visualization</h2>
+                <button class="modal-close-btn"
+                    style="background: transparent; border: none; color: white; cursor: pointer; font-size: 1.5rem;">&times;</button>
+            </div>
+            <div class="modal-body" style="flex:1; overflow:hidden; position: relative; background: #f8fafc;">
+                <div class="modal-loading" id="modalLoading"
+                    style="display:flex; justify-content:center; align-items:center; height:100%; flex-direction:column; gap: 1rem;">
+                    <div class="spinner" style="border-top-color: var(--primary);"></div>
+                    <p style="font-family: var(--font-heading); color: var(--text-muted);">Loading remote data...</p>
+                </div>
+                <iframe id="modalIframe" src="about:blank"
+                    style="width:100%; height:100%; border:none; display:none;"></iframe>
+            </div>
+        </div>
+    </div>
+
+    {% block extra_js %}{% endblock %}
+
+    <script>
+        // Modal logic
+        const modal = document.getElementById("infoModal");
+        const modalTitle = document.getElementById("modalTitle");
+        const modalIframe = document.getElementById("modalIframe");
+        const modalLoading = document.getElementById("modalLoading");
+        const closeBtn = document.querySelector(".modal-close-btn");
+
+        window.openModal = function (title, url) {
+            modalTitle.innerHTML = title;
+            modal.style.display = "flex";
+            modalLoading.style.display = "flex";
+            modalIframe.style.display = "none";
+            modalIframe.src = url;
+            modalIframe.onload = function () {
+                modalLoading.style.display = "none";
+                modalIframe.style.display = "block";
+            };
+            document.body.style.overflow = 'hidden'; // Prevent scroll
+        };
+
+        window.closeModal = function () {
+            modal.style.display = "none";
+            modalIframe.src = "about:blank";
+            document.body.style.overflow = ''; // Restore scroll
+        };
+
+        if (closeBtn) closeBtn.addEventListener("click", closeModal);
+        window.addEventListener("click", (e) => { if (e.target === modal) closeModal(); });
+        window.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModal(); });
+    </script>
+</body>
+
+</html>

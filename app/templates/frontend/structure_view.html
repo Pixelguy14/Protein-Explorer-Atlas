@@ -1,0 +1,160 @@
+{% extends 'layouts/base.html' %}
+
+{% block title %}3D Structure — {{ pdb_id }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="header" style="text-align:center; padding: 20px 0;">
+    <h1 style="color: var(--primary);"><i class="fas fa-cube"></i> 3D Structure Viewer</h1>
+    <h2 style="font-family: var(--font-heading); color: var(--text-muted);">
+        {{ pdb_id }}
+        {% if source == 'AlphaFold' %}
+            <span style="background: #7c3aed; color: white; padding: 2px 10px; border-radius: 4px; font-size: 0.7rem; vertical-align: middle;">AlphaFold Predicted</span>
+        {% else %}
+            <span style="background: var(--success); color: white; padding: 2px 10px; border-radius: 4px; font-size: 0.7rem; vertical-align: middle;">Experimental</span>
+        {% endif %}
+    </h2>
+</div>
+
+<div class="card" style="padding: 0; overflow: hidden; position: relative; min-height: 500px;">
+    <div id="viewer-container" style="width: 100%; height: 500px; background: #ffffff;">
+        <div class="loading-indicator" id="loadingIndicator">
+            <div class="spinner"></div>
+            <p>Fetching structural coordinates...</p>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="grid-3" style="justify-items: center; align-items: center;">
+        <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;">
+            <button class="btn btn-primary" onclick="resetView()">
+                <i class="fas fa-redo"></i> Reset View
+            </button>
+            <button class="btn btn-primary" onclick="toggleStyle()">
+                <i class="fas fa-palette"></i> Cycle Rendering
+            </button>
+        </div>
+        
+        <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;">
+            <button class="btn btn-accent" onclick="openPDB()">
+                <i class="fas fa-external-link-alt"></i> RCSB Explorer
+            </button>
+            <button class="btn btn-accent" onclick="downloadPDB()">
+                <i class="fas fa-download"></i> Download PDB
+            </button>
+        </div>
+
+        <div class="info-item" style="width: 100%; border: none; background: transparent;">
+             <p style="font-size: var(--text-xs); color: var(--text-muted);">
+                <i class="fas fa-mouse"></i> <strong>Rotate:</strong> Left Click | <strong>Zoom:</strong> Scroll | <strong>Pan:</strong> Right Click
+            </p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://3dmol.org/build/3Dmol-min.js"></script>
+<script>
+    let viewer;
+    let currentStyle = 'cartoon';
+    const pdbId = '{{ pdb_id }}';
+    // Use the explicit URL if provided (AlphaFold), otherwise construct RCSB URL
+    const pdbUri = '{{ pdb_url or "" }}' || `https://files.rcsb.org/download/${pdbId}.pdb`;
+
+    document.addEventListener("DOMContentLoaded", function() {
+        const element = document.getElementById('viewer-container');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        
+        if (!pdbId || !element) {
+            showError("Error: Invalid PDB ID provided.");
+            return;
+        }
+
+        const config = { 
+            backgroundColor: '0xffffff',
+            antialias: true,
+            quality: 'medium'
+        };
+        viewer = $3Dmol.createViewer(element, config);
+
+        fetch(pdbUri)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Failed to load PDB structure for ${pdbId}`);
+                }
+                return response.text();
+            })
+            .then(data => {
+                viewer.addModel(data, 'pdb');
+                applyStyle('cartoon');
+                viewer.zoomTo();
+                viewer.render();
+                loadingIndicator.style.display = 'none';
+            })
+            .catch(error => {
+                console.error("Molecule load error:", error);
+                showError(error.message);
+            });
+    });
+
+    function applyStyle(style) {
+        if (!viewer) return;
+        viewer.setStyle({}, {});  // Clear existing styles
+
+        switch(style) {
+            case 'cartoon':
+                viewer.setStyle({}, { cartoon: { color: 'spectrum' } });
+                break;
+            case 'stick':
+                viewer.setStyle({}, { stick: { colorscheme: 'Jmol' } });
+                break;
+            case 'sphere':
+                viewer.setStyle({}, { sphere: { colorscheme: 'Jmol' } });
+                break;
+            case 'line':
+                viewer.setStyle({}, { line: { colorscheme: 'Jmol' } });
+                break;
+        }
+        viewer.render();
+        currentStyle = style;
+    }
+
+    function resetView() {
+        if (viewer) {
+            viewer.zoomTo();
+            viewer.render();
+        }
+    }
+
+    function toggleStyle() {
+        const styles = ['cartoon', 'stick', 'sphere', 'line'];
+        const currentIndex = styles.indexOf(currentStyle);
+        const nextStyle = styles[(currentIndex + 1) % styles.length];
+        applyStyle(nextStyle);
+    }
+
+    function openPDB() {
+        window.open(`https://www.rcsb.org/structure/${pdbId}`, '_blank');
+    }
+
+    function downloadPDB() {
+        window.open(pdbUri, '_blank');
+    }
+
+    function showError(message) {
+        const element = document.getElementById('viewer-container');
+        element.innerHTML = `
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--danger); padding: 2rem; text-align: center;">
+                <i class="fas fa-exclamation-circle" style="font-size: 3rem; margin-bottom: 1rem;"></i>
+                <p>${message}</p>
+                <button class="btn btn-primary mt-4" onclick="location.reload()">Retry</button>
+            </div>
+        `;
+    }
+</script>
+{% endblock %}
